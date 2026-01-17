@@ -10,11 +10,11 @@ esp32:
 # Enable Home Assistant API
 api:
   encryption:
-    key: "pN6VqX2h/Ys72RSdG6GH512JxWDQ+lQeNLR1rRKf0LQ="
+    key: !secret api_key
 
 ota:
   - platform: esphome
-    password: "adf0ff30bacad0e5a3cffd1c74e70e00"
+    password: !secret ota_password
 
 wifi:
   ssid: !secret wifi_ssid
@@ -23,7 +23,7 @@ wifi:
   # Enable fallback hotspot (captive portal) in case wifi connection fails
   ap:
     ssid: "Esp32-Spa-V2 Fallback Hotspot"
-    password: "njmIOPA4IUR6"
+    password: !secret ap_password
 
 captive_portal:
 
