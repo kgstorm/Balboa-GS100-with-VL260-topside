@@ -43,7 +43,7 @@ config/
 - For the data and clock lines we use a simple voltage divider (2.2k and 4.7k) to reduce the voltage down to ~3.4V, then add a 220Ω series resistor to the ESP32 GPIOs.
 
 Wiring Diagram:
-![Witing diagram](docs/wiring.png)
+![Wiring diagram](docs/wiring.png)
 
 ESP32 DEVKIT V1 GPIO assignments:
 
@@ -57,8 +57,6 @@ ESP32 DEVKIT V1 GPIO assignments:
 | 6 | Clock | gold | 35 |
 | 7 | Jets Button | dark purple | 32 |
 | 8 | Cool Button | lime green | 26 |
-
-Wiring diagram (PDF): [docs/wiring.pdf](docs/wiring.pdf)
 
 ---
 
@@ -97,8 +95,23 @@ Bit -> Segment
   - Between each frame is a LOW segment of ~19ms.
 
 Logic analyzer screenshot:
+- In the screenshot below, the top signal is the data signal and the bottom is the clock.
+  - Packet 1 (bits 6543210)
+    - bit 6, 1, 0 LOW: used as a checksum (always LOW)
+    - bit 5, 4 LOW: indicates the hundreds digit of the display will be blank
+    - bit 2 HIGH: indicates the heater is on
+  - Packet 2 (bits 6543210)
+    - bit 1, 2, 3 HIGH: Translates into the number 7
+  - Packet 3 (bits 6543210)
+    - bit 1, 2, 3, 6, 7 HIGH: Translates into the number 9
+  - Therefore the display with show the temp of 79 degrees
+  - Packet 4 (bits 210)
+    - bit 2 HIGH: indicates the jets (in this case the circulation pump) is on
+    - bit 1 LOW: indicates the lights are off
+    - bit 0 LOW: used as a checksum (always LOW)
 
 ![Logic Analyzer](docs/logicAnalyzer.png)
+
 
 ---
 
