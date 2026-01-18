@@ -16,7 +16,7 @@ namespace esphome { namespace binary_sensor { class BinarySensor; } }
 // Forward declaration of C ISR wrapper (defined after the namespace)
 extern "C" void esp32_spa_v2_isr_wrapper(void* arg);
 
-static const char *TAG = "esp32-spa-v2";
+static const char *TAG = "esp32-spa";
 
 // ===== PIN DEFINITIONS =====
 // Using input-only GPIOs on ESP32: CLK=GPIO35, DATA=GPIO34
@@ -25,13 +25,13 @@ static const uint8_t CLK_PIN  = 35;  // Clock (input-only)
 static const uint8_t DATA_PIN = 34;  // Data (input-only)
 
 // Button output pins used to inject presses. These are boot-safe GPIOs and match
-// the values in `esp32-spa-v2.yaml` (Warm=25, Cool=26, Lights=27, Pumps=32).
+// the values in `esp32-spa.yaml` (Warm=25, Cool=26, Lights=27, Pumps=32).
 #define PIN_WRITE_BTN1 25  // Warm
 #define PIN_WRITE_BTN2 26  // Cool
 #define PIN_WRITE_BTN3 27  // Lights
 #define PIN_WRITE_PUMP 32  // Pumps
 
-namespace esp32_spa_v2 {
+namespace esp32_spa {
 
 class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::Sensor {
  public:
@@ -191,7 +191,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     // Install ISR service and attach to clock pin (rising edge)
     gpio_install_isr_service(0);
     // Use plain C ISR wrapper function to avoid linker relocation issues with C++ static member wrappers
-    gpio_isr_handler_add((gpio_num_t)CLK_PIN, &esp32_spa_v2_isr_wrapper, this);
+    gpio_isr_handler_add((gpio_num_t)CLK_PIN, &esp32_spa_isr_wrapper, this);
     gpio_set_intr_type((gpio_num_t)CLK_PIN, GPIO_INTR_POSEDGE);
 
     // Initialize auto-refresh timer to avoid an immediate forced press on boot
@@ -622,10 +622,10 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   }
 };
 
-}  // namespace esp32_spa_v2
+}  // namespace esp32_spa
 
 // Plain C ISR wrapper placed in IRAM to avoid dangerous relocations when linking C++ static member wrappers.
-extern "C" void IRAM_ATTR esp32_spa_v2_isr_wrapper(void* arg) {
-  auto *self = static_cast<esp32_spa_v2::HotTubDisplaySensor*>(arg);
+extern "C" void IRAM_ATTR esp32_spa_isr_wrapper(void* arg) {
+  auto *self = static_cast<esp32_spa::HotTubDisplaySensor*>(arg);
   if (self) self->handle_isr();
 }

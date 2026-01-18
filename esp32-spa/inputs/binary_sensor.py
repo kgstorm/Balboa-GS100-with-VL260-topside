@@ -3,7 +3,7 @@ import esphome.config_validation as cv
 from esphome.components import binary_sensor
 
 # Reference the C++ class from sensor.py
-esp32_spa_ns = cg.esphome_ns.namespace('esp32_spa_v2')
+esp32_spa_ns = cg.esphome_ns.namespace('esp32_spa')
 HotTubDisplaySensor = esp32_spa_ns.class_('HotTubDisplaySensor', cg.Component)
 
 CONF_PARENT_ID = 'parent_id'

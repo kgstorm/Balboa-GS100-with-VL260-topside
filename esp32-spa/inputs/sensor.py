@@ -4,8 +4,8 @@ from esphome.components import sensor as sensor_ns
 from esphome.const import CONF_ID
 from esphome.cpp_types import Component
 
-# Expose the C++ class `HotTubDisplaySensor` (defined in esp32-spa-v2.h)
-esp32_spa_ns = cg.esphome_ns.namespace('esp32_spa_v2')
+# Expose the C++ class `HotTubDisplaySensor` (defined in esp32-spa.h)
+esp32_spa_ns = cg.esphome_ns.namespace('esp32_spa')
 HotTubDisplaySensor = esp32_spa_ns.class_('HotTubDisplaySensor', Component)
 
 CONF_MEASURED_TEMP = 'measured_temp'
