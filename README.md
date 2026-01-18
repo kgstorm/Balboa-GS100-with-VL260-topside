@@ -9,9 +9,13 @@
 
 This project adds an ESP32 to a Balboa GS100 (VL260 topside) to send and receive data using ESPHome and Home Assistant. It provides wiring, measurement notes, and an ESPHome configuration to integrate the spa panel with Home Assistant.
 
+This has only been tested with a Balboa GS100 control board and the VL260 topside panel, but this project should work for any spa with the VL260 topside panel. I imagine any 4-button Balboa topside controller would have a very similar setup. 
+
+The GS100 has an RJ45 connector that sends and receives data to the topside panel. This project taps into that signal by creating a project box that the topside panel will plug into, and then with another ethernet type cable connect the project box back to the GS100 control board.
+
 ---
 
-## Installation ✅
+## Software Installation ✅
 
 1. Copy the `esp32-spa.yaml` file and the entire `esp32-spa` folder into your Home Assistant config folder under the `esphome/` subfolder. The folder layout should look like:
 
@@ -40,6 +44,21 @@ config/
 
 Wiring Diagram:
 ![Witing diagram](docs/wiring.png)
+
+Below is a pin matrix explaining what gets connected to each RJ45 pin on the SPA panel:
+
+| Spa RJ45 pin | Function | Wiring diagram color | GPIO pin |
+|---:|---|---|---|
+| 1 | VIN | red | VIN |
+| 2 | Warm Button | orange | 25 |
+| 3 | Light Button | light purple | 26 |
+| 4 | GND | black | GND |
+| 5 | Display Data | green | 34 |
+| 6 | Clock | gold | 35 |
+| 7 | Jets Button | dark purple | 32 |
+| 8 | Cool Button | lime green | 26 |
+
+Wiring diagram (PDF): [docs/wiring.pdf](docs/wiring.pdf)
 
 ---
 
