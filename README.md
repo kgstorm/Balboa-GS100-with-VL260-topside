@@ -86,11 +86,11 @@ Logic analyzer screenshot:
 ## Images📐
 
 
-![Connectors](docs/connectors.jpg)
+![Connectors](docs/connectors.png)
 
-![PCB](docs/pcb.jpg)
+![PCB](docs/pcb.png)
 
-![Mounted](docs/mounted.jpg)
+![Mounted](docs/mounted.png)
 
 ---
 
