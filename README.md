@@ -45,7 +45,7 @@ config/
 Wiring Diagram:
 ![Witing diagram](docs/wiring.png)
 
-Below is a pin matrix explaining what gets connected to each RJ45 pin on the SPA panel:
+ESP32 DEVKIT V1 GPIO assignments:
 
 | Spa RJ45 pin | Function | Wiring diagram color | GPIO pin |
 |---:|---|---|---|
