@@ -126,7 +126,7 @@ Logic analyzer screenshot:
 
 ---
 
-## Other Balboa projects 🔗
+## Other Balboa projects
 
 - Balboa-GS510SZ with panel VL700S: https://github.com/MagnusPer/Balboa-GS510SZ
 - GL2000 Series: https://github.com/netmindz/balboa_GL_ML_spa_control
