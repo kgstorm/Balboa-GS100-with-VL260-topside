@@ -51,7 +51,7 @@ ESP32 DEVKIT V1 GPIO assignments:
 |---:|---|---|---|
 | 1 | VIN | red | VIN |
 | 2 | Warm Button | orange | 25 |
-| 3 | Light Button | light purple | 26 |
+| 3 | Light Button | light purple | 27 |
 | 4 | GND | black | GND |
 | 5 | Display Data | green | 34 |
 | 6 | Clock | gold | 35 |
