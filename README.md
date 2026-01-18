@@ -104,7 +104,7 @@ Logic analyzer screenshot:
     - bit 1, 2, 3 HIGH: Translates into the number 7
   - Packet 3 (bits 6543210)
     - bit 1, 2, 3, 6, 7 HIGH: Translates into the number 9
-  - Therefore the display with show the temp of 79 degrees
+  - Therefore the display will show the temp of 79 degrees
   - Packet 4 (bits 210)
     - bit 2 HIGH: indicates the jets (in this case the circulation pump) is on
     - bit 1 LOW: indicates the lights are off
