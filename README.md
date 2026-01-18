@@ -83,6 +83,17 @@ Logic analyzer screenshot:
 
 ---
 
+## Images📐
+
+
+![Connectors](docs/connectors.jpg)
+
+![PCB](docs/pcb.jpg)
+
+![Mounted](docs/mounted.jpg)
+
+---
+
 ## Other Balboa projects 🔗
 
 - Balboa-GS510SZ with panel VL700S: https://github.com/MagnusPer/Balboa-GS510SZ
