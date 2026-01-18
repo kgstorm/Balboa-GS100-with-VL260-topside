@@ -38,7 +38,7 @@ config/
 - The 4 buttons on the topside panel act like switches that connect to 5V when pressed, but when not pressed show ~2.5V. To avoid interfering with the panel we used optocouplers to reproduce the switch signals safely.
 - For the data and clock lines we use a simple voltage divider (2.2k and 4.7k) to reduce the voltage down to ~3.4V, then add a 220Ω series resistor to the ESP32 GPIOs.
 
-Wiring diagram (PDF): [docs/wiring.pdf](docs/wiring.pdf)
+![Witing diagram](docs/wiring.png)
 
 ---
 
