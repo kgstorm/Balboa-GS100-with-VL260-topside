@@ -38,6 +38,7 @@ config/
 - The 4 buttons on the topside panel act like switches that connect to 5V when pressed, but when not pressed show ~2.5V. To avoid interfering with the panel we used optocouplers to reproduce the switch signals safely.
 - For the data and clock lines we use a simple voltage divider (2.2k and 4.7k) to reduce the voltage down to ~3.4V, then add a 220Ω series resistor to the ESP32 GPIOs.
 
+Wiring Diagram:
 ![Witing diagram](docs/wiring.png)
 
 ---
@@ -66,11 +67,15 @@ Bit -> Segment
 - Packet 4 (3 bits):
   - Bit 2 = pump status
   - Bit 1 = light status
-  - Remaining bits appear LOW and act as a checksum in my observations.
+
+ - The remaining bits always appear LOW in my observation. I use them as a frame checksum. They are: Packet 1 bits 6, 3, 1, 0 and Packet 4 bit 0 (MSB to LSB).
+
 
 - Timing observations (from logic analyzer):
   - Clock pulses: ~16 µs ON with ~21 µs gap between pulses.
   - Data pulses: ~17.5 µs with ~20 µs gap; data is sampled on the rising edges of the clock.
+  - Each frame consists of 24 bits (4 packets of 7 bits, 7 bits, 7 bits, and 3 bits.
+  - Between each frame is a LOW segment of ~19ms.
 
 Logic analyzer screenshot:
 
@@ -80,10 +85,9 @@ Logic analyzer screenshot:
 
 ## Other Balboa projects 🔗
 
+- Balboa-GS510SZ with panel VL700S: https://github.com/MagnusPer/Balboa-GS510SZ
 - GL2000 Series: https://github.com/netmindz/balboa_GL_ML_spa_control
 - BP Series: https://github.com/ccutrer/balboa_worldwide_app
 - GS523SZ: https://github.com/Shuraxxx/-Balboa-GS523SZ-with-panel-VL801D-DeluxeSerie--MQTT
 
----
 
-If you want, I can also add a CONTRIBUTING section or example `secrets.yaml` with the expected keys.
