@@ -447,7 +447,27 @@ class SpaControlCard extends HTMLElement {
   static async getConfigElement() {
     if (!customElements.get('spa-control-card-editor')) {
       class SpaControlCardEditor extends HTMLElement {
-        setConfig(config) { this._config = config || {}; this.render(); }
+        setConfig(config) {
+          this._config = config || {};
+          // render once; subsequent setConfig calls update existing inputs to preserve caret/focus
+          if (!this._inited) {
+            this.render();
+            this._inited = true;
+            return;
+          }
+
+          // update input values in-place without re-rendering (preserve selection/caret)
+          const dev = this.querySelector('#device_name');
+          if (dev && dev.value !== (this._config.device_name || '')) dev.value = this._config.device_name || '';
+          const title = this.querySelector('#title');
+          if (title && title.value !== (this._config.title || '')) title.value = this._config.title || '';
+          const high = this.querySelector('#high_setting');
+          const highVal = typeof this._config.high_setting !== 'undefined' ? String(this._config.high_setting) : '';
+          if (high && high.value !== highVal) high.value = highVal;
+          const low = this.querySelector('#low_setting');
+          const lowVal = typeof this._config.low_setting !== 'undefined' ? String(this._config.low_setting) : '';
+          if (low && low.value !== lowVal) low.value = lowVal;
+        }
         render() {
           this.innerHTML = '';
           const container = document.createElement('div');
