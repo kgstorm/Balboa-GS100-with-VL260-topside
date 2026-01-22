@@ -458,15 +458,15 @@ class SpaControlCard extends HTMLElement {
 
           // update input values in-place without re-rendering (preserve selection/caret)
           const dev = this.querySelector('#device_name');
-          if (dev && dev.value !== (this._config.device_name || '')) dev.value = this._config.device_name || '';
+          if (dev && document.activeElement !== dev && dev.value !== (this._config.device_name || '')) dev.value = this._config.device_name || '';
           const title = this.querySelector('#title');
-          if (title && title.value !== (this._config.title || '')) title.value = this._config.title || '';
+          if (title && document.activeElement !== title && title.value !== (this._config.title || '')) title.value = this._config.title || '';
           const high = this.querySelector('#high_setting');
           const highVal = typeof this._config.high_setting !== 'undefined' ? String(this._config.high_setting) : '';
-          if (high && high.value !== highVal) high.value = highVal;
+          if (high && document.activeElement !== high && high.value !== highVal) high.value = highVal;
           const low = this.querySelector('#low_setting');
           const lowVal = typeof this._config.low_setting !== 'undefined' ? String(this._config.low_setting) : '';
-          if (low && low.value !== lowVal) low.value = lowVal;
+          if (low && document.activeElement !== low && low.value !== lowVal) low.value = lowVal;
         }
         render() {
           this.innerHTML = '';
@@ -522,7 +522,8 @@ class SpaControlCard extends HTMLElement {
             const cfg = {
               type: 'custom:spa-control-card',
               device_name: devField.input.value.trim(),
-              title: titleField.input.value.trim() || undefined,
+              // preserve spaces the user types in the title field; only convert empty -> undefined
+              title: titleField.input.value !== '' ? titleField.input.value : undefined,
               high_setting: highField.input.value !== '' ? Number(highField.input.value) : undefined,
               low_setting: lowField.input.value !== '' ? Number(lowField.input.value) : undefined,
             };
