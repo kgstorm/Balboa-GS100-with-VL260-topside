@@ -30,9 +30,11 @@ config/
         └── sensor.py
 ```
 
-2. In Home Assistant go to **ESPHome**, click **New Device** → **Import From File**, and select `esp32-spa.yaml`.
+2. Edit the UNITS key in the esp32-spa.yaml file to set the temperature units. 
 
-3. `esp32-spa.yaml` will also look for a `secrets.yaml` file inside the **esphome/** folder for the following keys: `api_key`, `wifi_ssid`, `wifi_password`, `ota_password`, and `ap_password`.
+3. In Home Assistant go to **ESPHome**, click **New Device** → **Import From File**, and select `esp32-spa.yaml`.
+
+4. `esp32-spa.yaml` will also look for a `secrets.yaml` file inside the **esphome/** folder for the following keys: `api_key`, `wifi_ssid`, `wifi_password`, `ota_password`, and `ap_password`.
 
 ---
 
@@ -51,11 +53,11 @@ ESP32 DEVKIT V1 GPIO assignments:
 |---:|---|---|---|
 | 1 | VIN | red | VIN |
 | 2 | Warm Button | orange | 25 |
-| 3 | Light Button | light purple | 27 |
+| 3 | Light Button | purple | 27 |
 | 4 | GND | black | GND |
 | 5 | Display Data | green | 34 |
-| 6 | Clock | gold | 35 |
-| 7 | Jets Button | dark purple | 32 |
+| 6 | Clock | yellow | 35 |
+| 7 | Jets Button | blue | 32 |
 | 8 | Cool Button | lime green | 26 |
 
 ---
@@ -68,14 +70,14 @@ This repository includes a Home Assistant custom card for controlling and monito
 2. Open the dashboard where you want to add the card, click the three-dot menu (upper-right) and select **Manage resources**.
 3. Click **Add resource**, set **URL** to `/local/spa-control-card.js` and **Resourse Type** to `Javascript Module`, then save.
 4. Add the card to your dashboard via **Add Card** → search for **Spa Control Card** or use the raw YAML (below)
-5. For the Device Name, enter whatever you named your esp device. Given this name, the frontend can discover all the required entities
+5. For the Device Name, enter whatever you named your esp device. If you did not modify the yaml file, enter 'esp32-spa'. Given the device name, the frontend can discover all the required entities.
 
 ```yaml
 type: 'custom:spa-control-card'      # required
 device_name: 'esp32-spa'      # required - replace with your esp device name
-title: 'Backyard Spa'     # optional - card title
-high_setting: 104         # optional - Temp for one button press to high temp 
-low_setting: 98    # optional - Temp for one button press to low temp
+title: 'Hot Tub Control'     # optional - card title
+high_setting: 103         # optional - Temp for one button press to high temp 
+low_setting: 80    # optional - Temp for one button press to low temp
 
 ```
 

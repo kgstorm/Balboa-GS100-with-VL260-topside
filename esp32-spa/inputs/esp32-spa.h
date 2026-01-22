@@ -41,9 +41,6 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   volatile bool frame_ready = false;
   // Note: removed time-based gap detection in ISR to avoid calling non-IRAM functions from ISR
 
-  // ---- Debug control ----
-  bool debug_enabled = false;
-
   // ---- Publish control ----
   uint32_t last_publish_time = 0;
   uint32_t last_published_value = 0;
@@ -57,6 +54,11 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   uint32_t last_zero_seen_time = 0; // last time we saw 0x00 in p2/p3
   uint32_t last_candidate_temp_time = 0; // last time we saw a candidate temp while in set mode
   bool in_set_mode = false;         // true when we've seen 0x00 recently
+
+  // Pending measured temp publish (to avoid misreading brief set-mode flashes as measured temp)
+  int16_t pending_measured_temp = -1;        // -1 = none pending
+  uint32_t pending_measured_since = 0;       // time when pending started (ms)
+  static constexpr uint32_t MEASURE_PUBLISH_DELAY_MS = 500;  // delay before publishing measured temp (ms)
 
   // Stability tracking (counters and candidates)
   int16_t candidate_temp = -2; uint8_t stable_temp = 0;
@@ -111,6 +113,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   void set_heater_sensor(esphome::binary_sensor::BinarySensor *s) { heater_sensor_ = s; }
   void set_pump_sensor(esphome::binary_sensor::BinarySensor *s) { pump_sensor_ = s; }
   void set_light_sensor(esphome::binary_sensor::BinarySensor *s) { light_sensor_ = s; }
+
+
 
   
   // Decode temperature from p1, p2, p3
@@ -226,7 +230,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       last_frame_valid = false;
     }
     portEXIT_CRITICAL(&spinlock_);
-    if (partials > 0 && debug_enabled) {
+    if (partials > 0) {
       ESP_LOGW(TAG, "Dropped %u partial/incomplete frames (gaps before 24 bits)", partials);
     }
 
@@ -334,19 +338,15 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     const uint8_t checksum_val  = 0x00;  // expected zeros in masked bits
     const uint8_t p4_mask = 0x1;        // require p4 LSB == 0
     if ((p1 & checksum_mask) != checksum_val || (p4 & p4_mask) != 0) {
-      if (debug_enabled) {
-        ESP_LOGW(TAG, "Frame fails checksum (p1 masked=0x%02X expected=0x%02X, p4_lsb=0x%X), ignoring",
+      ESP_LOGW(TAG, "Frame fails checksum (p1 masked=0x%02X expected=0x%02X, p4_lsb=0x%X), ignoring",
                 static_cast<unsigned>(p1 & checksum_mask), static_cast<unsigned>(checksum_val), static_cast<unsigned>(p4 & p4_mask));
-      }
       // Treat as non-existent frame
       last_frame_valid = false;
       return;
     }
 
-    // Small debug: log raw frame and parts (useful when debug switch is enabled)
-    if (debug_enabled) {
-      ESP_LOGD(TAG, "Frame received raw=0x%06X p1=0x%02X p2=0x%02X p3=0x%02X p4=0x%X", out, static_cast<unsigned>(p1), static_cast<unsigned>(p2), static_cast<unsigned>(p3), static_cast<unsigned>(p4));
-    }
+    // Small debug: log raw frame and parts
+    ESP_LOGD(TAG, "Frame received raw=0x%06X p1=0x%02X p2=0x%02X p3=0x%02X p4=0x%X", out, static_cast<unsigned>(p1), static_cast<unsigned>(p2), static_cast<unsigned>(p3), static_cast<unsigned>(p4));
 
     // Decode the 7-seg patterns to digits
     int8_t digit2 = decode_7seg(p2);
@@ -364,7 +364,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       stable_zero = 1;
     }
 
-    if (debug_enabled && is_zero) {
+    if (is_zero) {
       ESP_LOGD(TAG, "Zero raw detected: p2=0x%02X p3=0x%02X decoded d2=%d d3=%d", static_cast<unsigned>(p2), static_cast<unsigned>(p3), digit2, digit3);
     }
 
@@ -398,25 +398,21 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
       // If we saw a recent candidate temp (even just-before the zero), accept it as potential
       if (set_temp_potential < 0 && candidate_temp >= 0 && (now - last_candidate_temp_time <= 3000)) {
-        set_temp_potential = candidate_temp;
-        if (debug_enabled) {
-          ESP_LOGD(TAG, "Zero detected and recent candidate found: set_temp_potential=%d (age=%ums)", set_temp_potential, static_cast<unsigned>(now - last_candidate_temp_time));
-        }
+        set_temp_potential = candidate_temp; // raw numeric from display
+        ESP_LOGD(TAG, "Zero detected and recent candidate found: set_temp_potential=%d (age=%ums)", set_temp_potential, static_cast<unsigned>(now - last_candidate_temp_time));
       }
-
       in_set_mode = true;
-      
-      if (debug_enabled) {
-        ESP_LOGD(TAG, "Zero detected (0x00), entering/staying in set mode");
-      }
+      // Cancel any pending measured-temp publish because set mode is starting
+      pending_measured_temp = -1;
+      pending_measured_since = 0;
+      ESP_LOGD(TAG, "Zero detected (0x00), entering/staying in set mode");
     } else if (candidate_temp >= 0 && in_set_mode) {
       // We have observed a non-zero temp while already in set mode. Set as potential immediately
-      if (set_temp_potential != candidate_temp) {
-        set_temp_potential = candidate_temp;
+      int16_t display_candidate = candidate_temp; // raw numeric from display
+      if (set_temp_potential != display_candidate) {
+        set_temp_potential = display_candidate;
         last_candidate_temp_time = now;
-        if (debug_enabled) {
-          ESP_LOGD(TAG, "Set temp potential updated (transient): %d", set_temp_potential);
-        }
+        ESP_LOGD(TAG, "Set temp potential updated (transient): %d", set_temp_potential);
       } else {
         // refresh timestamp even if same potential
         last_candidate_temp_time = now;
@@ -427,9 +423,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     if (in_set_mode && (now - last_zero_seen_time >= SET_MODE_TIMEOUT_MS)) {
       in_set_mode = false;
       set_temp_potential = -1;
-      if (debug_enabled) {
-        ESP_LOGD(TAG, "Exited set mode (timeout)");
-      }
+      ESP_LOGD(TAG, "Exited set mode (timeout)");
     }
 
     // Publish set temp if we have a potential and see another zero
@@ -439,28 +433,48 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         last_set_temp = set_temp_potential;
         if (set_temp_sensor_) {
           set_temp_sensor_->publish_state(static_cast<float>(last_set_temp));
-          if (debug_enabled) {
-            ESP_LOGD(TAG, "Publishing set temp: %d [confirmed by zero]", last_set_temp);
-          }
+          ESP_LOGD(TAG, "Publishing set temp: %d [confirmed by zero]", last_set_temp);
         }
         // Reset the auto-refresh timer since we successfully captured & published a set temp
         last_set_sent_time_ms = now;
         last_publish_time = now;
-      } else if (debug_enabled) {
+      } else {
         ESP_LOGW(TAG, "Set temp potential too old (%ums), ignoring", static_cast<unsigned>(now - last_candidate_temp_time));
       }
     }
 
-    // Publish measured temp if not in set mode and temp is stable and changed
-    if (!in_set_mode && temp_stable && candidate_temp >= 0 && candidate_temp != last_measured_temp) {
-      last_measured_temp = candidate_temp;
-      if (measured_temp_sensor_) {
-        measured_temp_sensor_->publish_state(static_cast<float>(last_measured_temp));
-        if (debug_enabled) {
-          ESP_LOGD(TAG, "Publishing measured temp: %d", last_measured_temp);
+    // Publish measured temp, but wait a short time to ensure we are not entering set mode
+    if (temp_stable && candidate_temp >= 0 && candidate_temp != last_measured_temp) {
+      if (in_set_mode) {
+        // If we're in set mode, drop any candidate
+        pending_measured_temp = -1;
+        pending_measured_since = 0;
+      } else {
+        // Not in set mode: start or evaluate pending timer
+        int16_t display_candidate = candidate_temp; // raw numeric from display
+        if (pending_measured_temp != display_candidate) {
+          // New candidate: start pending timer
+          pending_measured_temp = display_candidate;
+          pending_measured_since = now;
+          ESP_LOGD(TAG, "Measured temp candidate %d pending, waiting %ums to ensure not set-mode", display_candidate, static_cast<unsigned>(MEASURE_PUBLISH_DELAY_MS));
+        } else if ((now - pending_measured_since) >= MEASURE_PUBLISH_DELAY_MS) {
+          // Timer elapsed and still not in set mode -> publish
+          last_measured_temp = pending_measured_temp;
+          if (measured_temp_sensor_) {
+            measured_temp_sensor_->publish_state(static_cast<float>(last_measured_temp));
+            ESP_LOGD(TAG, "Publishing measured temp: %d", last_measured_temp);
+          }
+          last_publish_time = now;
+          pending_measured_temp = -1;
+          pending_measured_since = 0;
         }
       }
-      last_publish_time = now;
+    } else {
+      // No stable candidate or candidate changed -> clear any pending measured temp
+      if (candidate_temp < 0 || pending_measured_temp != candidate_temp) {
+        pending_measured_temp = -1;
+        pending_measured_since = 0;
+      }
     }
 
     // Always update binary sensors from p4 and p1 with per-bit stability
@@ -516,16 +530,12 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
     bool binary_changed = (pub_heater != last_heater || pub_pump != last_pump || pub_light != last_light);
     if (binary_changed) {
-      if (debug_enabled) {
-        ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d (stable: h=%u p=%u l=%u)", pub_heater, pub_pump, pub_light, static_cast<unsigned>(stable_heater), static_cast<unsigned>(stable_pump), static_cast<unsigned>(stable_light));
-      }
+      ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d (stable: h=%u p=%u l=%u)", pub_heater, pub_pump, pub_light, static_cast<unsigned>(stable_heater), static_cast<unsigned>(stable_pump), static_cast<unsigned>(stable_light));
       if (heater_sensor_) { heater_sensor_->publish_state(static_cast<bool>(pub_heater)); last_heater = pub_heater; }
       if (pump_sensor_) { pump_sensor_->publish_state(static_cast<bool>(pub_pump)); last_pump = pub_pump; }
       if (light_sensor_) { light_sensor_->publish_state(static_cast<bool>(pub_light)); last_light = pub_light; }
       
-      if (debug_enabled) {
-        ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d", pub_heater, pub_pump, pub_light);
-      }
+      ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d", pub_heater, pub_pump, pub_light);
 
       last_published_value = value;
       last_publish_time = now;
@@ -533,17 +543,13 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       portENTER_CRITICAL(&spinlock_);
       last_frame_valid = true;
       portEXIT_CRITICAL(&spinlock_);
-    } else if (debug_enabled) {
+    } else {
       // No change; do not publish
       ESP_LOGD(TAG, "No changes detected");
     }
   }
 
-  // Called by HA switch
-  void set_debug(bool enabled) {
-    debug_enabled = enabled;
-    ESP_LOGI(TAG, "Debug logging %s", enabled ? "ENABLED" : "DISABLED");
-  }
+
 
   // Public dispatcher safely callable from C ISR wrapper
   void IRAM_ATTR handle_isr() { this->on_clock_edge_isr(); }

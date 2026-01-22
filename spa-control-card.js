@@ -186,7 +186,7 @@ class SpaControlCard extends HTMLElement {
     if (titleEl) { titleEl.textContent = titleText; titleEl.style.display = titleText ? 'block' : 'none'; }
 
     // Assign deterministic entity IDs based on device name (no guessing)
-    // User specified: set entity = sensor.${device}_spa_set_temp
+    // User specified: set entity = sensor.${device}_set_temp
     if (!this.config.set_entity) this.config.set_entity = `sensor.${this._device_norm}_spa_set_temp`;
     if (!this.config.measured_entity) this.config.measured_entity = `sensor.${this._device_norm}_spa_measured_temp`;
 

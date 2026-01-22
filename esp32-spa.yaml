@@ -1,3 +1,6 @@
+substitutions:
+  UNITS: "F"  # F, or C
+
 esphome:
   name: esp32-spa
   friendly_name: esp32-spa
@@ -41,13 +44,13 @@ sensor:
     measured_temp:
       name: "Spa Measured Temp"
       id: spa_measured_temp
-      unit_of_measurement: "°F"
+      unit_of_measurement: "°${UNITS}"
       accuracy_decimals: 0
       device_class: temperature
     set_temp:
       name: "Spa Set Temp"
       id: spa_set_temp
-      unit_of_measurement: "°F"
+      unit_of_measurement: "°${UNITS}"
       accuracy_decimals: 0
       device_class: temperature
 
@@ -116,16 +119,3 @@ button:
       - output.turn_on: spa_pumps_out
       - delay: 100ms
       - output.turn_off: spa_pumps_out
-
-# ===== DEBUG TOGGLE SWITCH =====
-switch:
-  - platform: template
-    name: "Hot Tub Display Debug Logging"
-    optimistic: true
-    restore_mode: RESTORE_DEFAULT_OFF
-    turn_on_action:
-      - lambda: |-
-          id(display_handler)->set_debug(true);
-    turn_off_action:
-      - lambda: |-
-          id(display_handler)->set_debug(false);
