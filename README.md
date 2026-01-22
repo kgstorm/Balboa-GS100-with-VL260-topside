@@ -60,6 +60,32 @@ ESP32 DEVKIT V1 GPIO assignments:
 
 ---
 
+## Frontend
+
+This repository includes a Home Assistant custom card for controlling and monitoring the spa. To install the frontend component:
+
+1. Copy `spa-control-card.js` into your Home Assistant `www/` folder (e.g., `config/www/spa-control-card.js`).
+2. Open the dashboard where you want to add the card, click the three-dot menu (upper-right) and select **Manage resources**.
+3. Click **Add resource**, set **URL** to `/local/spa-control-card.js` and **Resourse Type** to `Javascript Module`, then save.
+4. Add the card to your dashboard via **Add Card** → search for **Spa Control Card** or use the raw YAML (below)
+5. For the Device Name, enter whatever you named your esp device. Given this name, the frontend can discover all the required entities
+
+```yaml
+type: 'custom:spa-control-card'      # required
+device_name: 'esp32-spa'      # required - replace with your esp device name
+title: 'Backyard Spa'     # optional - card title
+high_setting: 104         # optional - Temp for one button press to high temp 
+low_setting: 98    # optional - Temp for one button press to low temp
+
+```
+
+If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or clear the browser cache.
+
+![Spa Control Card](docs/spa-card.png)
+
+---
+
+
 ## Measurements
 
 - The clock stream consists of 4 packets of data: three packets of 7 bits and a final packet with 3 bits.
@@ -112,8 +138,8 @@ Logic analyzer screenshot:
 
 ![Logic Analyzer](docs/logicAnalyzer.png)
 
-
 ---
+
 
 ## Images
 
@@ -125,6 +151,7 @@ Logic analyzer screenshot:
 ![Mounted](docs/mounted.png)
 
 ---
+
 
 ## Other Balboa projects
 
