@@ -40,16 +40,48 @@ class SpaControlCard extends HTMLElement {
       this._container.innerHTML = `
         <ha-card>
           <style>
-            .spa-left { position: absolute; left: 0px; top: 18px; height: auto; width: 140px; display:flex; flex-direction:column; justify-content:flex-start; gap:5px; padding:6px 0; box-sizing:border-box; overflow:visible }
-            .spa-right { position: absolute; right: 0px; top: 18px; height: auto; width: 140px; display:flex; flex-direction:column; justify-content:flex-start; gap:5px; padding:6px 0; box-sizing:border-box; overflow:visible }
+            /* CSS-driven side stacks positioned relative to the display circle. */
+            .circle { --side-width: 84px; --side-gap: 5px; --gap-from-circle: 16px; --circle-size: 260px; position:relative }
+            /* center vertically without transform to avoid creating a stacking context */
+            .spa-left, .spa-right { position:absolute; top:0; bottom:0; margin:auto 0; display:flex; flex-direction:column; gap:var(--side-gap); padding:6px 6px; box-sizing:border-box; width: var(--side-width); align-items:center; justify-content:center }
+            .spa-left { left: calc(-1 * (var(--side-width) + var(--gap-from-circle))); }
+            .spa-right { right: calc(-1 * (var(--side-width) + var(--gap-from-circle))); }
+
+            /* make each row fill container width and center its content */
+            .spa-left > div, .spa-right > div { width:100%; display:flex; align-items:center; justify-content:center; gap:8px }
+            /* hide the inline spacer divs used by older layouts */
+            .spa-left > div > div, .spa-right > div > div { display:none }
+
+            /* buttons should fill the available width of their container */
+            .side-button { position:relative; z-index:auto; width:100%; max-width:100%; box-sizing:border-box; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.28); background:linear-gradient(var(--side-button-bg-start,#ffffff),var(--side-button-bg-end,#efefef)); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:14px; text-align:center; padding:6px; overflow:visible }
+
+            /* responsive tweaks */
+            @media (max-width: 520px) {
+              .circle { --circle-size: 200px; --side-width: 64px; --gap-from-circle: 10px; --side-gap: 4px; }
+              .circle .meas { font-size:42px; }
+              /* nudge the Set row up more to avoid overlapping the bottom icons */
+              .set-row { font-size:14px; margin-top:2px; transform: translateY(-24px); }
+              .inner-sensors { bottom:12px; width:56%; }
+              .side-button { height:38px; font-size:13px; padding:4px; }
+            }
+            @media (max-width: 420px) {
+              .circle { --side-width: 70px; --gap-from-circle: 10px; --side-gap: 5px; }
+            }
 
             /* defined side buttons that visually form a panel around the circle */
-            .side-button { position:relative; z-index:2; width:84px; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.28); background:linear-gradient(var(--side-button-bg-start,#ffffff),var(--side-button-bg-end,#efefef)); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:14px; text-align:center; padding:6px; overflow:visible }
+            .side-button { position:relative; z-index:auto; width:84px; height:44px; border-radius:6px; border:2px solid rgba(0,0,0,0.28); background:linear-gradient(var(--side-button-bg-start,#ffffff),var(--side-button-bg-end,#efefef)); color:var(--primary-text-color,#000); display:flex; align-items:center; justify-content:center; box-shadow:0 8px 18px rgba(0,0,0,0.10); transition: transform .12s ease, box-shadow .12s ease; font-weight:700; font-size:14px; text-align:center; padding:6px; overflow:visible }
             .side-button.left { padding-right:10px; }
             .side-button.right { padding-left:10px; }
-            .side-button:hover { transform: translateX(6px); box-shadow:0 14px 28px rgba(0,0,0,0.14); }
-            .side-button.right:hover { transform: translateX(-6px); }
+            /* only apply hover translation on devices that actually support hover (mouse) — prevents persistent hover state on touch devices */
+            @media (hover: hover) and (pointer: fine) {
+              .side-button:hover { transform: translateX(6px); box-shadow:0 14px 28px rgba(0,0,0,0.14); }
+              .side-button.right:hover { transform: translateX(-6px); }
+            }
             .side-button ha-icon { color: inherit; }
+
+            /* transient press feedback: briefly apply 'tap' class which scales the button momentarily */
+            .side-button.tap { transform: scale(0.96) !important; box-shadow:0 6px 14px rgba(0,0,0,0.12) !important; transition: transform .08s ease, box-shadow .08s ease !important; }
+            .side-button.right.tap { transform: scale(0.96) !important; }
 
             /* Dark mode styles */
             @media (prefers-color-scheme: dark) {
@@ -57,12 +89,11 @@ class SpaControlCard extends HTMLElement {
               .side-button:hover { box-shadow: 0 10px 20px rgba(0,0,0,0.6); }
             }
 
-            /* mask uses CSS variables so it can be positioned so the arc is concentric with the display circle */
+            /* buttons are simple rectangular controls; previous mask-based cutouts removed */
             .side-button::after { display: none; }
 
-            .side-bar { width:8px;height:64px;border-radius:6px;background:rgba(0,0,0,0.06); }
             /* slight bevel to blend with circle */
-            .circle { background:linear-gradient(#ffffff,#fafafa); box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4); z-index:6; position:relative }
+            .circle { background:linear-gradient(#ffffff,#fafafa); box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4); position:relative; width:var(--circle-size,260px); height:var(--circle-size,260px); border-radius:50%; }
 
             /* optional card title */
             .card-title { font-size:18px; font-weight:600; margin-bottom:8px; text-align:center; color:var(--primary-text-color); }
@@ -72,7 +103,7 @@ class SpaControlCard extends HTMLElement {
           <div style="display:flex;align-items:center;justify-content:center;padding:18px">
             <div id="big" style="display:flex;flex-direction:column;align-items:center;justify-content:center">
               <div id="card_title" class="card-title" style="display:none"></div>
-              <div class="circle" style="width:260px;height:260px;border-radius:50%;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper-card-background-color);box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4);">                <div class="meas" style="font-size:60px;font-weight:700">—</div>
+              <div class="circle" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper-card-background-color);box-shadow: inset 0 0 0 6px var(--primary-color, #03A9F4);">                <div class="meas" style="font-size:60px;font-weight:700">—</div>
                 <div class="set-row" style="margin-top:12px;font-size:18px;color:var(--secondary-text-color)"><span class="set-label">Set</span>: <span class="set">—</span></div>
                 <div id="config_msg" style="margin-top:6px;font-size:12px;color:var(--error-color)"></div>
 
@@ -182,6 +213,12 @@ class SpaControlCard extends HTMLElement {
       if (!el) return;
       if (!el.__hasClick) {
         el.addEventListener('click', handler.bind(this));
+        // transient pulse feedback for multiple clicks: briefly add 'pulse' class then remove
+        el.addEventListener('click', () => {
+          el.classList.add('tap');
+          if (el.__tapTimeout) clearTimeout(el.__tapTimeout);
+          el.__tapTimeout = setTimeout(() => el.classList.remove('tap'), 140);
+        });
         el.__hasClick = true;
       }
     };
@@ -198,20 +235,7 @@ class SpaControlCard extends HTMLElement {
     if (setHighEl) setHighEl.style.display = (typeof this.config.high_setting !== 'undefined') ? 'flex' : 'none';
     if (setLowEl) setLowEl.style.display = (typeof this.config.low_setting !== 'undefined') ? 'flex' : 'none';
 
-    // position the inner cutouts so each button edge is concentric with the display circle
-    this._updateCutouts();
-    if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
-    this._resizeHandler = this._updateCutouts.bind(this);
-    window.addEventListener('resize', this._resizeHandler);
-
-    // watch for text/size changes (e.g., measured temp updating) and re-run the cutout sync
-    if (this._mutObs) this._mutObs.disconnect();
-    this._mutObs = new MutationObserver(() => this._updateCutouts());
-    const measEl = this.querySelector('#big .meas');
-    const setEl = this.querySelector('#big .set');
-    // observe the card container as a fallback if individual elements aren't present
-    const target = measEl || setEl || this._container;
-    this._mutObs.observe(target, { subtree: true, childList: true, characterData: true });
+    // layout handled by CSS (no JS cutouts required).
   }
 
   set hass(hass) {
@@ -281,8 +305,7 @@ class SpaControlCard extends HTMLElement {
       roundBtns.forEach(b => b && (b.style.filter = this._busy ? 'grayscale(0.6) opacity(0.8)' : 'none'));
     }
 
-    // keep the masks in sync (e.g. when text changes/size changes)
-    this._updateCutouts();
+    // layout now purely CSS-driven; nothing to run here
   }
 
   _normalizeDeviceName(name) {
@@ -301,128 +324,11 @@ class SpaControlCard extends HTMLElement {
 
   disconnectedCallback() {
     if (this._resizeHandler) window.removeEventListener('resize', this._resizeHandler);
-    if (this._mutObs) this._mutObs.disconnect();
   }
 
-  // keep side button inner masks concentric with the main circle
-  _updateCutouts() {
-    // Keep buttons in normal flow and compute clip-path tangents relative to the circle
-    window.requestAnimationFrame(() => {
-      setTimeout(() => {
-        const circle = this.querySelector('.circle');
-        if (!circle) return;
-        const circleRect = circle.getBoundingClientRect();
-        const gap = 5; // spacing between buttons
-        const buttonCount = 3; // number of buttons per side
-        const radius = circleRect.width / 2;
-        const centerX = circleRect.left + radius;
-        const centerY = circleRect.top + circleRect.height / 2;
-
-        // Ensure side container spacing matches the requirement and position them relative to card edges
-        const sideContainers = this.querySelectorAll('.spa-left, .spa-right');
-        const big = this.querySelector('#big');
-        const bigRect = big ? big.getBoundingClientRect() : { left: 0, top: 0 };
-        const haCard = this.querySelector('ha-card');
-        const haRect = haCard ? haCard.getBoundingClientRect() : bigRect;
-        sideContainers.forEach(c => {
-          c.style.display = 'flex';
-          c.style.flexDirection = 'column';
-          c.style.gap = `${gap}px`;
-
-          // compute horizontal offset so outer edge is 5px from card edge
-          let containerWidth = Math.round((c.getBoundingClientRect && c.getBoundingClientRect().width) || c.offsetWidth || 140);
-          const sideName = c.classList.contains('spa-left') ? 'left' : 'right';
-
-          if (c.classList.contains('spa-left')) {
-            // place container so its LEFT edge sits 5px inside the left edge of the card (i.e. card.left + 5)
-            const desiredLeftRel = Math.round(haRect.left - circleRect.left + 5);
-            const leftPos = Math.round(desiredLeftRel);
-            c.style.left = `${leftPos}px`;
-            c.style.right = 'auto';
-          } else {
-            // place container so its RIGHT edge sits 5px to the LEFT of the right edge of the card (i.e. card.right - 5)
-            const desiredRightRel = Math.round(haRect.right - circleRect.left - 5);
-            // attempt to move container to the right of the circle with a gap; if it doesn't fit, shrink container width
-            let leftPos = Math.round(desiredRightRel - containerWidth);
-            c.style.left = `${leftPos}px`;
-            c.style.right = 'auto';
-
-            // compute absolute coords
-            let absLeft = Math.round(circleRect.left + leftPos);
-            let absRight = absLeft + containerWidth;
-            const expectedRightAbs = haRect.right - 5;
-
-            // space available between circle right and card right
-            const availableSpace = Math.round(haRect.right - (circleRect.left + circleRect.width));
-            const desiredMarginFromCircle = 16; // px gap from circle right edge (bigger per request)
-            const minContainerWidth = 100; // ensure buttons still fit (button=84 + padding)
-
-            if (containerWidth > (availableSpace - desiredMarginFromCircle)) {
-              // shrink container to fit the available space while keeping at least minContainerWidth
-              const newContainerWidth = Math.max(minContainerWidth, availableSpace - desiredMarginFromCircle);
-              if (newContainerWidth < containerWidth) {
-                c.style.width = `${newContainerWidth}px`;
-                // shrink child button widths to fit (give them a small padding)
-                Array.from(c.querySelectorAll('.side-button')).forEach(b => {
-                  b.style.width = `${Math.max(84, newContainerWidth - 16)}px`;
-                });
-                containerWidth = newContainerWidth;
-                // recompute positions
-                leftPos = Math.round(desiredRightRel - containerWidth);
-                absLeft = Math.round(circleRect.left + leftPos);
-                absRight = absLeft + containerWidth;
-              }
-            }
-
-            // After possible shrinking, ensure it is at or to the right of circle + margin and inside card
-            const minAbsLeft = Math.round(circleRect.left + circleRect.width + desiredMarginFromCircle);
-            const maxAbsLeft = Math.round(haRect.right - 5 - containerWidth);
-
-            if (absLeft < minAbsLeft) {
-              absLeft = minAbsLeft;
-              leftPos = absLeft - circleRect.left;
-            }
-            if (absLeft > maxAbsLeft) {
-              absLeft = maxAbsLeft;
-              leftPos = absLeft - circleRect.left;
-            }
-
-            // apply changes
-            c.style.left = `${leftPos}px`;
-            absRight = absLeft + containerWidth;
-          }
-
-          // compute vertical placement so the button stack is centered within the circle
-          const buttons = Array.from(c.querySelectorAll('.side-button'));
-          const numButtons = buttons.length || 3;
-          // measure an individual button height (use offsetHeight or fallback to 44)
-          const sampleBtn = buttons[0];
-          const btnH = sampleBtn ? (sampleBtn.getBoundingClientRect().height || sampleBtn.offsetHeight) : 44;
-          const stackGap = gap; // gap between buttons
-          const stackHeight = Math.round(numButtons * btnH + (numButtons - 1) * stackGap);
-
-          // compute top inside the circle (circle is the positioned ancestor)
-          let topPx = Math.round((circleRect.height - stackHeight) / 2);
-          // ensure some minimal padding
-          if (topPx < 6) topPx = 6;
-
-          c.style.top = `${topPx}px`;
-          // keep container height to circle height so it stays inside
-          c.style.height = `${Math.round(circleRect.height)}px`;
-        });
-        
-
-        // Remove complex clipping — use simple rectangular buttons with slight rounding and thicker borders
-        const sideButtons = this.querySelectorAll('.spa-left .side-button, .spa-right .side-button');
-        sideButtons.forEach(btn => {
-          btn.style.clipPath = 'none';
-          btn.style.borderRadius = '6px';
-          btn.style.margin = '0';
-        });
-
-      }, 0);
-    });
-  }
+  // Position side button stacks relative to the display circle
+  /* Layout handled by CSS now. _updateCutouts retained as a no-op for backward compatibility. */
+  _updateCutouts() { /* no-op; CSS handles positions */ }
 
   // Note: removed fuzzy/auto inference functions — entities are mapped deterministically now
 
@@ -529,6 +435,98 @@ class SpaControlCard extends HTMLElement {
 
   getCardSize() {
     return 3;
+  }
+
+  /* Lovelace editor integration: provide a simple schema-based editor using <ha-form>
+     The editor will ask for:
+       - device_name (required)
+       - title (optional)
+       - high_setting (optional)
+       - low_setting (optional)
+  */
+  static async getConfigElement() {
+    if (!customElements.get('spa-control-card-editor')) {
+      class SpaControlCardEditor extends HTMLElement {
+        setConfig(config) { this._config = config || {}; this.render(); }
+        render() {
+          this.innerHTML = '';
+          const container = document.createElement('div');
+          container.style.padding = '8px';
+          container.style.display = 'flex';
+          container.style.flexDirection = 'column';
+          container.style.gap = '8px';
+
+          const makeField = (labelText, id, type = 'text', required = false) => {
+            const wrapper = document.createElement('div');
+            wrapper.style.display = 'flex';
+            wrapper.style.flexDirection = 'column';
+
+            const label = document.createElement('label');
+            label.textContent = labelText;
+            label.style.fontSize = '13px';
+            label.style.marginBottom = '4px';
+            wrapper.appendChild(label);
+
+            const input = document.createElement('input');
+            input.id = id;
+            input.type = type;
+            input.style.padding = '6px 8px';
+            input.style.fontSize = '14px';
+            input.style.border = '1px solid rgba(0,0,0,0.12)';
+            input.required = !!required;
+            if (type === 'number') input.step = '1';
+
+            wrapper.appendChild(input);
+            return { wrapper, input };
+          };
+
+          const devField = makeField('Device name (required)', 'device_name', 'text', true);
+          const titleField = makeField('Title (optional)', 'title', 'text', false);
+          const highField = makeField('High setting (optional)', 'high_setting', 'number', false);
+          const lowField = makeField('Low setting (optional)', 'low_setting', 'number', false);
+
+          container.appendChild(devField.wrapper);
+          container.appendChild(titleField.wrapper);
+          container.appendChild(highField.wrapper);
+          container.appendChild(lowField.wrapper);
+
+          // populate values
+          devField.input.value = this._config.device_name || '';
+          titleField.input.value = this._config.title || '';
+          highField.input.value = typeof this._config.high_setting !== 'undefined' ? this._config.high_setting : '';
+          lowField.input.value = typeof this._config.low_setting !== 'undefined' ? this._config.low_setting : '';
+
+          // dispatch change events (debounced)
+          let timeout = null;
+          const dispatch = () => {
+            const cfg = {
+              type: 'custom:spa-control-card',
+              device_name: devField.input.value.trim(),
+              title: titleField.input.value.trim() || undefined,
+              high_setting: highField.input.value !== '' ? Number(highField.input.value) : undefined,
+              low_setting: lowField.input.value !== '' ? Number(lowField.input.value) : undefined,
+            };
+            this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: cfg } }));
+          };
+          const schedule = () => {
+            if (timeout) clearTimeout(timeout);
+            timeout = setTimeout(dispatch, 250);
+          };
+
+          [devField.input, titleField.input, highField.input, lowField.input].forEach(i => {
+            i.addEventListener('input', schedule);
+          });
+
+          this.appendChild(container);
+        }
+      }
+      customElements.define('spa-control-card-editor', SpaControlCardEditor);
+    }
+    return document.createElement('spa-control-card-editor');
+  }
+
+  static getStubConfig() {
+    return { type: 'custom:spa-control-card', device_name: '', title: '', high_setting: undefined, low_setting: undefined };
   }
 }
 
