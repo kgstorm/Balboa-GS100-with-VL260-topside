@@ -31,7 +31,7 @@ external_components:
   - source: esp32-spa
   
 logger:
-  level: DEBUG
+  level: WARN
   baud_rate: 0   # Prevent UART timing issues
 
 # ===== HOT TUB DISPLAY INPUTS =====
