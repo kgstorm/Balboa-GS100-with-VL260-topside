@@ -96,7 +96,7 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
   - Bits 5 and 4 HIGH indicate a `1` in the hundreds digit (Fahrenheit display).
   - Bit 2 is the heater status (when the heater is on this bit pulses).
 
-- Packets 2 & 3: used for the display characters where each bit maps to a segment of the 7-seg style character. Bit mapping (MSB→LSB):
+- Packets 2 & 3: used for the display characters where each bit maps to a segment of the 7-segment display. Here is the bit mapping (MSB→LSB):
 
 ```
 Bit -> Segment
@@ -109,6 +109,8 @@ Bit -> Segment
 0   = center
 ```
 
+- Given the above bit mapping, the nubmer 7 would illuminate the top, top-right, and bottom-right segments, so those bits would be HIGH and the packet would look like this: 1110000.
+
 - Packet 4 (3 bits):
   - Bit 2 = pump status
   - Bit 1 = light status
@@ -119,7 +121,7 @@ Bit -> Segment
 - Timing observations (from logic analyzer):
   - Clock pulses: ~16 µs ON with ~21 µs gap between pulses.
   - Data pulses: ~17.5 µs with ~20 µs gap; data is sampled on the rising edges of the clock.
-  - Each frame consists of 24 bits (4 packets of 7 bits, 7 bits, 7 bits, and 3 bits.
+  - Each frame consists of 24 bits (4 packets of 7 bits, 7 bits, 7 bits, and 3 bits)
   - Between each frame is a LOW segment of ~19ms.
 
 Logic analyzer screenshot:
