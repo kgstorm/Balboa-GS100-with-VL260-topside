@@ -89,7 +89,7 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
 
 ## Error Codes
 
-- This integration exposes a `text_sensor` for error codes (text_sensor.spa_error_code). The text sensor shows the 2‑character code from the topside display and a friendly translation when available, for example:
+- This integration exposes a `text_sensor` for error codes (sensor.<device name>_spa_error_code). The text sensor shows the 2‑character code from the topside display and a friendly translation when available, for example:
 
   - `HH - high overheat (water temp over 118 F)`
 
@@ -100,21 +100,19 @@ Trigger a mobile push when a new error code appears (replace `notify.mobile_app_
 
 ```yaml
 alias: "Spa Error Notification"
-trigger:
+triggers:
   - platform: state
-    entity_id: text_sensor.spa_error_code
+    entity_id: sensor.esp32_spa_spa_error_code
 condition:
   - condition: template
     value_template: >
-      {% set s = states('text_sensor.spa_error_code') | lower %}
+      {% set s = states('sensor.esp32_spa_spa_error_code') | lower %}
       {{ s not in ['', 'unknown', 'none', 'unavailable'] }}
 action:
   - service: notify.mobile_app_YOUR_DEVICE_NAME
     data:
       title: "Spa Alert"
-      message: "{{ states('text_sensor.spa_error_code') }}"
-      data:
-        tag: "spa_error"
+      message: "{{ states('sensor.esp32_spa_spa_error_code') }}"
 mode: single
 ```
 
