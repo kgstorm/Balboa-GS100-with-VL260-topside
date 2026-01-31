@@ -37,6 +37,12 @@ logger:
   level: WARN
   baud_rate: 0   # Prevent UART timing issues
 
+text_sensor:
+  - platform: inputs
+    parent_id: display_handler
+    type: error_code
+    name: "Spa Error Code"
+
 # ===== HOT TUB DISPLAY INPUTS =====
 sensor:
   - platform: inputs

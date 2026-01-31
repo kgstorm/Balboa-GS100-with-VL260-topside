@@ -3,9 +3,12 @@
 #include "esphome.h"
 #include "esphome/core/log.h"
 #include "esphome/components/sensor/sensor.h"  // ensure Sensor base class is available
+#include <string>
+#include <utility>
 
-// Forward-declare binary sensor to avoid requiring the header at this point
+// Forward-declare binary sensor and text sensor to avoid requiring the headers at this point
 namespace esphome { namespace binary_sensor { class BinarySensor; } }
+namespace esphome { namespace text_sensor { class TextSensor; } }
 
 // ESP-IDF / FreeRTOS headers
 #include "driver/gpio.h"
@@ -72,6 +75,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   // Sensors for temperature readings
   esphome::sensor::Sensor *measured_temp_sensor_ = nullptr;
   esphome::sensor::Sensor *set_temp_sensor_ = nullptr;
+  // Text sensor for error codes
+  esphome::text_sensor::TextSensor *error_text_sensor_ = nullptr;
 
   // Binary sensors for discrete states
   esphome::binary_sensor::BinarySensor *heater_sensor_ = nullptr;  // derived from p1 bit5
@@ -82,6 +87,10 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   int8_t last_heater = -1;  // -1=unknown, otherwise 0/1
   int8_t last_pump = -1;    // -1=unknown, otherwise 0/1
   int8_t last_light = -1;   // -1=unknown, otherwise 0/1
+  // Last published error code (string)
+  std::string last_error_code_ = "";
+  // Error code stability tracking
+  std::string candidate_error = ""; uint8_t stable_error = 0;
 
   static constexpr uint32_t HEARTBEAT_MS = 30000;  // heartbeat every 30s (publish if unchanged)
   // Gap threshold (ms) to consider the start of a new frame (use ~15ms to match ~19ms observed gap)
@@ -90,8 +99,10 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
   // Stability filtering: require this many consecutive identical decoded frames before publishing
   // Increased to 2 to reduce spurious publishes from brief noise
-  static constexpr uint8_t STABLE_THRESHOLD = 2;
-  static constexpr uint8_t PUMP_STABLE_THRESHOLD = 3;  // pump requires 4 repeats to be considered stable
+  static constexpr uint8_t STABLE_THRESHOLD = 3;
+  static constexpr uint8_t PUMP_STABLE_THRESHOLD = 3;  // pump requires 3 repeats to be considered stable
+  // Error codes are noisier — require more repeats to consider stable
+  static constexpr uint8_t ERROR_STABLE_THRESHOLD = 3;
   static constexpr uint32_t SET_MODE_TIMEOUT_MS = 2000;  // 2 seconds without 0x00 = exit set mode
   static constexpr uint32_t HEATER_OFF_TIMEOUT_MS = 1000; // heater must be off for 1s before clearing
 
@@ -108,6 +119,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   // Setters called from Python binding
   void set_measured_temp_sensor(esphome::sensor::Sensor *s) { measured_temp_sensor_ = s; }
   void set_set_temp_sensor(esphome::sensor::Sensor *s) { set_temp_sensor_ = s; }
+  void set_error_text_sensor(esphome::text_sensor::TextSensor *s) { error_text_sensor_ = s; }
 
   // Binary sensor setters
   void set_heater_sensor(esphome::binary_sensor::BinarySensor *s) { heater_sensor_ = s; }
@@ -143,43 +155,68 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       0b1110011  // 9
     };
 
-    // Exact match first
+    // Only accept exact matches to avoid occasional 1-bit misreads causing spurious digits.
     for (uint8_t d = 0; d < 10; ++d) {
       if (seg == map[d]) return static_cast<int8_t>(d);
     }
 
-    // Helper: hamming distance (XOR population count)
-    auto hamming = [](uint8_t a, uint8_t b) {
-      return __builtin_popcount(static_cast<unsigned>(a ^ b));
-    };
-
-    // Try tolerant match (allow 1-bit error)
-    uint8_t best_d = 0xFF;
-    int best_dist = 100;
-    for (uint8_t d = 0; d < 10; ++d) {
-      int dist = hamming(seg, map[d]);
-      if (dist < best_dist) { best_dist = dist; best_d = d; }
-    }
-    if (best_dist <= 1) return static_cast<int8_t>(best_d);
-
     // Try reversed bit order (maybe wiring/order is reversed)
     uint8_t rev = 0;
-    for (int i = 0; i < 7; ++i) {
-      rev |= ((seg >> i) & 0x1) << (6 - i);
-    }
+    for (int i = 0; i < 7; ++i) rev |= ((seg >> i) & 0x1) << (6 - i);
+    for (uint8_t d = 0; d < 10; ++d) if (rev == map[d]) return static_cast<int8_t>(d);
 
-    for (uint8_t d = 0; d < 10; ++d) {
-      if (rev == map[d]) return static_cast<int8_t>(d);
-    }
-    // Try tolerant on reversed
-    best_d = 0xFF; best_dist = 100;
-    for (uint8_t d = 0; d < 10; ++d) {
-      int dist = hamming(rev, map[d]);
-      if (dist < best_dist) { best_dist = dist; best_d = d; }
-    }
-    if (best_dist <= 1) return static_cast<int8_t>(best_d);
-
+    // If no exact match, treat as invalid (disregard)
     return -1;
+  }
+
+  // Decode a 7-seg pattern into a single character used in error codes.
+  // Returns '\0' if unknown.
+  static char decode_7seg_char(uint8_t seg) {
+    // Known letter/dash patterns (approximate common 7-seg shapes)
+    const std::pair<uint8_t,char> letters[] = {
+      {0b0000001, '-'}, // dash (g)
+      {0b0110111, 'H'}, // H
+      {0b1111110, 'O'}, // O 
+      {0b0110000, 'I'}, // I 
+      {0b1001110, 'C'}, // C
+      {0b1110111, 'A'}, // A
+      {0b0011111, 'b'}, // b
+      {0b0001110, 'L'}, // L
+      {0b1000111, 'F'}, // F
+      {0b0111011, 'Y'}, // Y
+      {0b0111101, 'd'}, // d 
+      {0b0000101, 'r'}, // r
+      {0b1011011, 'S'}, // S (same pattern as '5')
+      {0b0010101, 'n'}  // n (segments c,e,g)
+    };
+
+    // Prefer letter matches only (we intentionally avoid returning digits here)
+    for (auto &p : letters) {
+      if (seg == p.first) return p.second;
+    }
+
+    // Try reversed bit order too (for wiring/order mismatches)
+    uint8_t rev = 0;
+    for (int i = 0; i < 7; ++i) rev |= ((seg >> i) & 0x1) << (6 - i);
+    for (auto &p : letters) if (rev == p.first) return p.second;
+
+    return '\0';
+  }
+
+  // Translate known error codes to plain English
+  static const char* translate_error_code(const std::string &code) {
+    if (code == "--") return "unknown temperature (expected after power on)";
+    if (code == "HH") return "high overheat (water temp over 118 F)";
+    if (code == "OH") return "overheat (water temp over 108 F)";
+    if (code == "IC" || code == "1C") return "ice possible";
+    if (code == "SA") return "Sensor A out of service";
+    if (code == "Sb" || code == "5b") return "Sensor B out of service";
+    if (code == "Sn") return "sensors out of sync";
+    if (code == "HL") return "Significant difference between sensor values";
+    if (code == "LF") return "recurring low flow";
+    if (code == "dr") return "low flow";
+    if (code == "dY") return "Low water";
+    return nullptr;
   }
 
   void setup() override {
@@ -313,6 +350,34 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       if (pump_sensor_) { pump_sensor_->publish_state(static_cast<bool>(pump_val)); last_pump = pump_val; }
       if (light_sensor_) { light_sensor_->publish_state(static_cast<bool>(light_val)); last_light = light_val; }
 
+      // If p2/p3 form a valid temperature, clear any previous error and skip error processing
+      if (temp >= 0) {
+        if (!last_error_code_.empty()) {
+          if (error_text_sensor_) error_text_sensor_->publish_state("");
+          last_error_code_.clear(); candidate_error.clear(); stable_error = 0;
+        }
+      } else if (error_text_sensor_) {
+        char c2 = decode_7seg_char(p2);
+        char c3 = decode_7seg_char(p3);
+        std::string code = "";
+        code.push_back(c2 != '\0' ? c2 : '?');
+        code.push_back(c3 != '\0' ? c3 : '?');
+        const char *trans = translate_error_code(code);
+
+        // Treat any decoded (non-blank) character sequence as a candidate error, or a known translation
+        if (trans != nullptr || (c2 != '\0' || c3 != '\0')) {
+          if (candidate_error == code) { if (stable_error < 255) stable_error++; } else { candidate_error = code; stable_error = 1; }
+          if (stable_error >= ERROR_STABLE_THRESHOLD && code != last_error_code_) {
+            if (trans) error_text_sensor_->publish_state(code + std::string(" - ") + trans);
+            else error_text_sensor_->publish_state(code);
+            last_error_code_ = code;
+          }
+        } else {
+          // Not an error -> reset candidate
+          candidate_error.clear(); stable_error = 0;
+        }
+      }
+
       last_publish_time = now;
       first_publish = false;
       return;
@@ -372,6 +437,34 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     int16_t temp = -1;
     if (!is_zero && digit2 >= 0 && digit3 >= 0) {
       temp = decode_temp(p1, digit2, digit3);
+    }
+
+    // Decode/publish any error-code text (p2/p3) but only after it is stable and looks like an error
+    if (error_text_sensor_) {
+      // If the frame decodes to a numeric temperature, don't treat as an error
+      if (temp >= 0) {
+        candidate_error.clear(); stable_error = 0;
+      } else {
+        char c2 = decode_7seg_char(p2);
+        char c3 = decode_7seg_char(p3);
+        std::string code = "";
+        code.push_back(c2 != '\0' ? c2 : '?');
+        code.push_back(c3 != '\0' ? c3 : '?');
+        const char *trans = translate_error_code(code);
+
+        // Treat any decoded (non-blank) character sequence as a candidate error, or a known translation
+        if (trans != nullptr || (c2 != '\0' || c3 != '\0')) {
+          if (candidate_error == code) { if (stable_error < 255) stable_error++; } else { candidate_error = code; stable_error = 1; }
+          if (stable_error >= ERROR_STABLE_THRESHOLD && code != last_error_code_) {
+            if (trans) error_text_sensor_->publish_state(code + std::string(" - ") + trans);
+            else error_text_sensor_->publish_state(code);
+            last_error_code_ = code;
+          }
+        } else {
+          // Not an error -> reset candidate tracking
+          candidate_error.clear(); stable_error = 0;
+        }
+      }
     }
 
     // Stability update for temperature
@@ -445,6 +538,11 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
     // Publish measured temp, but wait a short time to ensure we are not entering set mode
     if (temp_stable && candidate_temp >= 0 && candidate_temp != last_measured_temp) {
+      // When a stable numeric temperature is visible, clear any previously-published error code
+      if (last_error_code_ != "") {
+        if (error_text_sensor_) error_text_sensor_->publish_state("");
+        last_error_code_.clear(); candidate_error.clear(); stable_error = 0;
+      }
       if (in_set_mode) {
         // If we're in set mode, drop any candidate
         pending_measured_temp = -1;
