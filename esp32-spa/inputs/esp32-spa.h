@@ -702,7 +702,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     last_clock_ccount = now_ccount;
 
     // Record start and exit critical to minimize time interrupts are disabled
-    uint32_t start_ccount = now_ccount;
+    uint32_t start_ccount = get_cycle_count();  // timing: just single instruction delay
 
     // Busy-wait using cycle count to let the data line settle (more accurate than counting NOPs)
     while ((get_cycle_count() - start_ccount) < SAMPLE_DELAY_CYCLES) {
