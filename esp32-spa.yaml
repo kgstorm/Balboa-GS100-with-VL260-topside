@@ -1,6 +1,6 @@
 substitutions:
   UNITS: "F"  # F, or C
-  version: "1.0.0"  # overridden by CI on release
+  version: "1.0.4"  # overridden by CI on release
 
 esphome:
   name: esp32-spa
