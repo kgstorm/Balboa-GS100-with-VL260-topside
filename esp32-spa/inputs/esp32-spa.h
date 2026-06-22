@@ -702,16 +702,14 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     last_clock_ccount = now_ccount;
 
     // Record start and exit critical to minimize time interrupts are disabled
-    uint32_t start_ccount = now_ccount;
-    portEXIT_CRITICAL_ISR(&spinlock_);
+    uint32_t start_ccount = get_cycle_count();  // timing: just single instruction delay
 
     // Busy-wait using cycle count to let the data line settle (more accurate than counting NOPs)
     while ((get_cycle_count() - start_ccount) < SAMPLE_DELAY_CYCLES) {
-      asm volatile ("nop");
+      __asm__ __volatile__("nop");    // noop, and keep compiler from optimizing out
     }
 
-    // Re-enter critical briefly to sample DATA and update shared state
-    portENTER_CRITICAL_ISR(&spinlock_);
+    // sample DATA and update shared state
     bool bit = gpio_get_level((gpio_num_t)DATA_PIN);
 
     shift_reg = (shift_reg << 1) | static_cast<uint32_t>(bit);
