@@ -86,6 +86,9 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   esphome::binary_sensor::BinarySensor *pump_sensor_ = nullptr;    // derived from p4 bit0
   esphome::binary_sensor::BinarySensor *light_sensor_ = nullptr;   // derived from p4 bit1
 
+  // Set to true when any valid 24-bit (p4-containing) frame is decoded; pump/light only published after this
+  bool seen_p4_ = false;
+
   // Last published discrete states
   int8_t last_heater = -1;  // -1=unknown, otherwise 0/1
   int8_t last_pump = -1;    // -1=unknown, otherwise 0/1
@@ -303,8 +306,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         if (measured_temp_sensor_ && last_measured_temp >= 0) measured_temp_sensor_->publish_state(static_cast<float>(last_measured_temp));
         if (set_temp_sensor_ && last_set_temp >= 0) set_temp_sensor_->publish_state(static_cast<float>(last_set_temp));
         if (heater_sensor_ && last_heater >= 0) { heater_sensor_->publish_state(static_cast<bool>(last_heater)); }
-        if (pump_sensor_ && last_pump >= 0) { pump_sensor_->publish_state(static_cast<bool>(last_pump)); }
-        if (light_sensor_ && last_light >= 0) { light_sensor_->publish_state(static_cast<bool>(last_light)); }
+        if (seen_p4_ && pump_sensor_ && last_pump >= 0) { pump_sensor_->publish_state(static_cast<bool>(last_pump)); }
+        if (seen_p4_ && light_sensor_ && last_light >= 0) { light_sensor_->publish_state(static_cast<bool>(last_light)); }
 
         ESP_LOGI(TAG, "Heartbeat publish (stored): measured=%d set=%d heater=%d pump=%d light=%d", last_measured_temp, last_set_temp, last_heater, last_pump, last_light);
 
@@ -349,8 +352,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       if (measured_temp_sensor_ && temp >= 0) measured_temp_sensor_->publish_state(static_cast<float>(temp));
       if (set_temp_sensor_ && last_set_temp >= 0) set_temp_sensor_->publish_state(static_cast<float>(last_set_temp));
       if (heater_sensor_) { heater_sensor_->publish_state(static_cast<bool>(heater_val)); last_heater = heater_val; }
-      if (pump_sensor_) { pump_sensor_->publish_state(static_cast<bool>(pump_val)); last_pump = pump_val; }
-      if (light_sensor_) { light_sensor_->publish_state(static_cast<bool>(light_val)); last_light = light_val; }
+      if (pump_sensor_) { last_pump = pump_val; if (seen_p4_) pump_sensor_->publish_state(static_cast<bool>(pump_val)); }
+      if (light_sensor_) { last_light = light_val; if (seen_p4_) light_sensor_->publish_state(static_cast<bool>(light_val)); }
 
       // If p2/p3 form a valid temperature, clear any previous error and skip error processing
       if (temp >= 0) {
@@ -418,6 +421,9 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
     // Small debug: log raw frame and parts
     ESP_LOGD(TAG, "Frame received raw=0x%06X bits=%u p1=0x%02X p2=0x%02X p3=0x%02X p4=0x%X", value, static_cast<unsigned>(nbits), static_cast<unsigned>(p1), static_cast<unsigned>(p2), static_cast<unsigned>(p3), static_cast<unsigned>(p4));
+
+    // Mark that we've seen a valid p4 frame (enables pump/light publishing)
+    if (nbits >= 24) seen_p4_ = true;
 
     // Decode the 7-seg patterns to digits
     int8_t digit2 = decode_7seg(p2);
@@ -636,8 +642,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     if (binary_changed) {
       ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d (stable: h=%u p=%u l=%u)", pub_heater, pub_pump, pub_light, static_cast<unsigned>(stable_heater), static_cast<unsigned>(stable_pump), static_cast<unsigned>(stable_light));
       if (heater_sensor_) { heater_sensor_->publish_state(static_cast<bool>(pub_heater)); last_heater = pub_heater; }
-      if (pump_sensor_) { pump_sensor_->publish_state(static_cast<bool>(pub_pump)); last_pump = pub_pump; }
-      if (light_sensor_) { light_sensor_->publish_state(static_cast<bool>(pub_light)); last_light = pub_light; }
+      if (pump_sensor_) { last_pump = pub_pump; if (seen_p4_) pump_sensor_->publish_state(static_cast<bool>(pub_pump)); }
+      if (light_sensor_) { last_light = pub_light; if (seen_p4_) light_sensor_->publish_state(static_cast<bool>(pub_light)); }
       
       ESP_LOGD(TAG, "Binary sensors updated: heater=%d pump=%d light=%d", pub_heater, pub_pump, pub_light);
 

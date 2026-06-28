@@ -282,16 +282,26 @@ class SpaControlCard extends HTMLElement {
     }
 
     if (pumpIcon) {
-      const isOn = pumpState && pumpState.state === 'on';
-      pumpIcon.style.color = isOn ? '#03a9f4' : offColor; // bright blue when running
-      pumpIcon.style.filter = isOn ? 'drop-shadow(0 0 8px rgba(3,169,244,0.9))' : 'none';
+      const unavailable = !pumpState || pumpState.state === 'unavailable';
+      const pumpContainer = pumpIcon.closest('.sensor.pump');
+      if (pumpContainer) pumpContainer.style.display = unavailable ? 'none' : 'flex';
+      if (!unavailable) {
+        const isOn = pumpState.state === 'on';
+        pumpIcon.style.color = isOn ? '#03a9f4' : offColor; // bright blue when running
+        pumpIcon.style.filter = isOn ? 'drop-shadow(0 0 8px rgba(3,169,244,0.9))' : 'none';
+      }
     }
 
     if (lightsIcon) {
-      const isOn = lightsState && lightsState.state === 'on';
-      // default is a binary_sensor for light status — simple on/off styling
-      lightsIcon.style.color = isOn ? '#ffd54f' : offColor; // warm yellow when on
-      lightsIcon.style.filter = isOn ? 'drop-shadow(0 0 10px rgba(255,213,79,0.9))' : 'none';
+      const unavailable = !lightsState || lightsState.state === 'unavailable';
+      const lightsContainer = lightsIcon.closest('.sensor.lights');
+      if (lightsContainer) lightsContainer.style.display = unavailable ? 'none' : 'flex';
+      if (!unavailable) {
+        const isOn = lightsState.state === 'on';
+        // default is a binary_sensor for light status — simple on/off styling
+        lightsIcon.style.color = isOn ? '#ffd54f' : offColor; // warm yellow when on
+        lightsIcon.style.filter = isOn ? 'drop-shadow(0 0 10px rgba(255,213,79,0.9))' : 'none';
+      }
     }
 
     // reflect busy state in controls (disable while adjusting set points)
