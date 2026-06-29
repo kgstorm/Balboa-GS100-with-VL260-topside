@@ -480,12 +480,12 @@ class SpaControlCard extends HTMLElement {
     try {
       // Step 1: press Warm to trigger the set-temp flash (enters mode-select state)
       await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
-      await this._sleep(450);
+      await this._sleep(1000);
 
       // Step 2: repeatedly press Light to cycle through modes until target matches
       for (let i = 0; i < 8; i++) {
         await this._hass.callService('button', 'press', { entity_id: this.config.lights_button_entity });
-        await this._sleep(700); // allow firmware to detect stable mode code and HA to propagate
+        await this._sleep(1500); // allow firmware to detect stable mode code and HA to propagate
         const ms = this._hass.states[this.config.mode_entity];
         if (ms && this._modeMatches(ms.state.toLowerCase(), targetMode)) break;
         if (i === 7) this._showConfigMessage('Could not set mode — check spa display');

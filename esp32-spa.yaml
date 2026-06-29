@@ -1,5 +1,5 @@
 substitutions:
-  version: "2.0" 
+  version: "2.1" 
 
 esphome:
   name: esp32-spa

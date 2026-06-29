@@ -256,21 +256,21 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     gpio_set_direction((gpio_num_t)PIN_WRITE_BTN2, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
 
-    // Press COOL shortly after boot to initialize/set the displayed set-temp
-    // Press on at 1.5s, release at 1.7s. Update the last_set_sent_time when pressed.
-    this->set_timeout("boot_press_cool_on", 1500, [this]() {
+    // Press COOL 5s after boot to initialize/set the displayed set-temp
+    // Press on at 5.0s, release at 5.2s. Update the last_set_sent_time when pressed.
+    this->set_timeout("boot_press_cool_on", 5000, [this]() {
       ESP_LOGI(TAG, "Boot: auto-pressing COOL to initialize set temp");
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
       last_set_sent_time_ms = esphome::millis();
     });
-    this->set_timeout("boot_press_cool_off", 1700, []() {
+    this->set_timeout("boot_press_cool_off", 5200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
-    // Press LIGHTS ~600ms after the cool press to also capture the current heating mode on boot
-    this->set_timeout("boot_press_light_on",  2300, []() {
+    // Press LIGHTS 1s after the cool press to also capture the current heating mode on boot
+    this->set_timeout("boot_press_light_on",  6200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
     });
-    this->set_timeout("boot_press_light_off", 2500, []() {
+    this->set_timeout("boot_press_light_off", 6400, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
     });
   }
@@ -303,9 +303,9 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
         // Ensure we release it after a short duration (mirror existing press timing)
         this->set_timeout("auto_press_cool", 200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        // 600ms after Cool press, press Lights once to also capture the current heating mode
-        this->set_timeout("auto_press_light_on",  600, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off", 800, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+        // Press Lights 1s after Cool press to also capture the current heating mode
+        this->set_timeout("auto_press_light_on",  1200, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
+        this->set_timeout("auto_press_light_off", 1400, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
         // Update timer to avoid repeated presses
         last_set_sent_time_ms = now;
         // Also reset heartbeat timing so we don't immediately publish stale data
