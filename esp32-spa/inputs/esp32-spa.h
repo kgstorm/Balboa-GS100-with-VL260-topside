@@ -17,7 +17,7 @@ namespace esphome { namespace text_sensor { class TextSensor; } }
 #include "esp_timer.h"
 
 // Forward declaration of C ISR wrapper (defined after the namespace)
-extern "C" void esp32_spa_isr_wrapper(void* arg);
+extern "C" void IRAM_ATTR esp32_spa_isr_wrapper(void* arg);
 
 static const char *TAG = "esp32-spa";
 
@@ -253,8 +253,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     last_set_sent_time_ms = esphome::millis();
 
     // Ensure COOL button pin is setup as an output (harmless if balboa_custom also configures it)
-    gpio_set_direction((gpio_num_t)PIN_WRITE_BTN2, GPIO_MODE_OUTPUT);
     gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
+    gpio_set_direction((gpio_num_t)PIN_WRITE_BTN2, GPIO_MODE_OUTPUT);
 
     // Press COOL 5s after boot to initialize/set the displayed set-temp
     // Press on at 5.0s, release at 5.2s. Update the last_set_sent_time when pressed.
