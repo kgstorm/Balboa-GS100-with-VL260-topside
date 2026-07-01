@@ -200,8 +200,11 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       {0b0111011, 'Y'}, // Y
       {0b0111101, 'd'}, // d 
       {0b0000101, 'r'}, // r
-      {0b1011011, 'S'}, // S (same pattern as '5')
-      {0b0010101, 'n'}  // n (segments c,e,g)
+      {0b1011011, 'S'}, // S 
+      {0b0010101, 'n'}, // n 
+      {0b1001111, 'E'}, // E 
+      {0b0001111, 't'}, // t 
+      {0b0001101, 'c'}  // c 
     };
 
     // Prefer letter matches only (we intentionally avoid returning digits here)
@@ -267,10 +270,10 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
     // Press LIGHTS 1s after the cool press to also capture the current heating mode on boot
-    this->set_timeout("boot_press_light_on",  6200, []() {
+    this->set_timeout("boot_press_light_on",  6700, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
     });
-    this->set_timeout("boot_press_light_off", 6400, []() {
+    this->set_timeout("boot_press_light_off", 6900, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
     });
   }
@@ -304,8 +307,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         // Ensure we release it after a short duration (mirror existing press timing)
         this->set_timeout("auto_press_cool", 200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
         // Press Lights 1s after Cool press to also capture the current heating mode
-        this->set_timeout("auto_press_light_on",  1200, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off", 1400, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+        this->set_timeout("auto_press_light_on",  1700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
+        this->set_timeout("auto_press_light_off", 1900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
         // Update timer to avoid repeated presses
         last_set_sent_time_ms = now;
         // Also reset heartbeat timing so we don't immediately publish stale data
@@ -497,27 +500,33 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     // Publish spa mode when a stable mode string is detected
     if (is_mode_string) {
       std::string mode_str;
-      if      (c2_char == 'E') mode_str = "economy";
-      else if (c2_char == 'S' && c3_char == 'L') mode_str = "sleep";
-      else                     mode_str = "standard";
+      if      (c2_char == 'S' && c3_char == 't') mode_str = "Standard";
+      else if (c2_char == 'E' && c3_char == 'c') mode_str = "Economy";
+      else if (c2_char == 'S' && c3_char == 'L') mode_str = "Sleep";
+      else                                        mode_str = ""; // unrecognised — skip
 
-      if (candidate_mode_ == mode_str) { if (stable_mode_ < 255) stable_mode_++; }
-      else                             { candidate_mode_ = mode_str; stable_mode_ = 1; }
+      if (!mode_str.empty()) {
+        if (candidate_mode_ == mode_str) { if (stable_mode_ < 255) stable_mode_++; }
+        else                             { candidate_mode_ = mode_str; stable_mode_ = 1; }
 
-      if (stable_mode_ >= MODE_STABLE_THRESHOLD && mode_str != last_mode_) {
-        last_mode_ = mode_str;
-        if (spa_mode_text_sensor_) spa_mode_text_sensor_->publish_state(last_mode_);
-        ESP_LOGI(TAG, "Spa mode published: %s", last_mode_.c_str());
-      }
-    } else if (temp >= 0) {
-      // Valid temperature visible -> standard operation
-      if (candidate_mode_ != "standard") { candidate_mode_ = "standard"; stable_mode_ = 1; }
-      else if (stable_mode_ < 255) stable_mode_++;
+        if (stable_mode_ >= MODE_STABLE_THRESHOLD && mode_str != last_mode_) {
+          last_mode_ = mode_str;
+          if (spa_mode_text_sensor_) spa_mode_text_sensor_->publish_state(last_mode_);
+          ESP_LOGI(TAG, "Spa mode published: %s", last_mode_.c_str());
 
-      if (stable_mode_ >= MODE_STABLE_THRESHOLD && last_mode_ != "standard") {
-        last_mode_ = "standard";
-        if (spa_mode_text_sensor_) spa_mode_text_sensor_->publish_state(last_mode_);
-        ESP_LOGI(TAG, "Spa mode published: standard (normal operation)");
+          // Mode appearing means Light was pressed, ending the set-temp flash sequence.
+          // If we have a recent set temp potential, confirm and publish it now.
+          if (in_set_mode && set_temp_potential >= 0 && set_temp_potential != last_set_temp
+              && (now - last_candidate_temp_time <= 3000)) {
+            last_set_temp = set_temp_potential;
+            if (set_temp_sensor_) {
+              set_temp_sensor_->publish_state(static_cast<float>(last_set_temp));
+              ESP_LOGD(TAG, "Publishing set temp: %d [confirmed by mode string]", last_set_temp);
+            }
+            last_set_sent_time_ms = now;
+            last_publish_time = now;
+          }
+        }
       }
     } else if (!is_set_indicator) {
       // Unknown display state — reset mode candidate

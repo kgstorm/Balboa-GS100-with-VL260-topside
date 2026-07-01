@@ -7,11 +7,13 @@
 
 ## Description
 
-This project adds an ESP32 to a Balboa GS100 (VL260 topside) to send and receive data using ESPHome and Home Assistant. It provides wiring, measurement notes, and an ESPHome configuration to integrate the spa panel with Home Assistant.
+This project adds an Wifi module to a Balboa Hot Tub. This project has been tested with a few Balboa control boards and seems to work with any VL200 series or VL400 series topside controllers. I imagine any 3 or 4-button Balboa topside controllers with RJ45 connectors would have a very similar setup. 
 
-This has only been tested with a Balboa GS100 control board and the VL260 topside panel, but this project should work for any spa with the VL260 topside panel. I imagine any 4-button Balboa topside controller would have a very similar setup. 
+---
 
-The GS100 has an RJ45 connector that sends and receives data to the topside panel. This project taps into that signal by creating a project box that the topside panel will plug into, and then with another ethernet type cable connect the project box back to the GS100 control board.
+## Purchase Option
+
+Everything you need to know to build a module is contained in this repository. However, I do have some modules available for purchase as well.
 
 ---
 
@@ -78,6 +80,7 @@ device_name: 'esp32-spa'      # required - replace with your esp device name
 title: 'Hot Tub Control'     # optional - card title
 high_setting: 103         # optional - Temp for one button press to high temp 
 low_setting: 80    # optional - Temp for one button press to low temp
+show_mode_buttons: true   # optional - show/hide Economy/Standard/Sleep buttons (default: true)
 
 ```
 
@@ -92,6 +95,14 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
 - This integration exposes a `text_sensor` for error codes (sensor.<device name>_spa_error_code). The text sensor shows the 2‑character code from the topside display and a friendly translation when available, for example:
 
   - `HH - high overheat (water temp over 118 F)`
+
+---
+
+## Heating Mode
+
+This integration exposes a `text_sensor` for the current heating mode (`sensor.<device_name>_spa_mode`). The possible states are **Standard**, **Economy**, and **Sleep**. Standard mode turns the heater and circulation pump on whenever the measured temperature drops below the set temperature. Economy only heats when the circulation pumps are programmed to run. Sleep mode also only heats when the circulation pumps are programmed to run, but also only heats to ~10C/20F below the set temperature. 
+
+The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Cool button followed by the Light button.
 
 
 ### Example Home Assistant automation (mobile push notification)
@@ -176,11 +187,11 @@ Logic analyzer screenshot:
 ## Images
 
 
-![Connectors](docs/connectors.png)
+![PCB](docs/pcb.jpg)
 
-![PCB](docs/pcb.png)
+![Project Box](docs/box.jpg)
 
-![Mounted](docs/mounted.png)
+![Mounted](docs/mounted.jpg)
 
 ---
 

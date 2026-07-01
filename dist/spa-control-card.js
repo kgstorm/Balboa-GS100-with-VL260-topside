@@ -306,21 +306,15 @@ class SpaControlCard extends HTMLElement {
       }
     }
 
-    // Mode button active state — highlight whichever heating mode is currently active
+    // Mode label inside circle — reflects current mode state
     const modeState = getState(this.config.mode_entity);
     const modeVal = modeState && modeState.state !== 'unknown' && modeState.state !== 'unavailable'
       ? modeState.state.toLowerCase() : '';
-    const ecoBtn = this.querySelector('#eco_btn');
-    const stdBtn = this.querySelector('#standard_btn');
-    const sleepBtn = this.querySelector('#sleep_btn');
-    if (ecoBtn) ecoBtn.classList.toggle('active', this._modeMatches(modeVal, 'eco'));
-    if (stdBtn) stdBtn.classList.toggle('active', this._modeMatches(modeVal, 'standard'));
-    if (sleepBtn) sleepBtn.classList.toggle('active', this._modeMatches(modeVal, 'sleep'));
     const modeLabelEl = this.querySelector('#mode-label');
     if (modeLabelEl) {
       if (this._modeMatches(modeVal, 'eco')) modeLabelEl.textContent = 'Economy';
       else if (this._modeMatches(modeVal, 'sleep')) modeLabelEl.textContent = 'Sleep';
-      else if (this._modeMatches(modeVal, 'standard')) modeLabelEl.textContent = 'Std';
+      else if (this._modeMatches(modeVal, 'standard')) modeLabelEl.textContent = 'Standard';
       else modeLabelEl.textContent = '';
     }
 
@@ -478,14 +472,12 @@ class SpaControlCard extends HTMLElement {
     this._busy = true;
     this._update();
     try {
-      // Step 1: press Warm to trigger the set-temp flash (enters mode-select state)
-      await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
-      await this._sleep(1000);
-
-      // Step 2: repeatedly press Light to cycle through modes until target matches
+      // Each attempt: press Warm, wait 500ms, press Light, wait 1000ms, check mode
       for (let i = 0; i < 8; i++) {
+        await this._hass.callService('button', 'press', { entity_id: this.config.temp_up_entity });
+        await this._sleep(500);
         await this._hass.callService('button', 'press', { entity_id: this.config.lights_button_entity });
-        await this._sleep(1500); // allow firmware to detect stable mode code and HA to propagate
+        await this._sleep(1000); // allow firmware to detect stable mode code and HA to propagate
         const ms = this._hass.states[this.config.mode_entity];
         if (ms && this._modeMatches(ms.state.toLowerCase(), targetMode)) break;
         if (i === 7) this._showConfigMessage('Could not set mode — check spa display');

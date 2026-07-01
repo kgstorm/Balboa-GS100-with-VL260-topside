@@ -1,5 +1,5 @@
 substitutions:
-  version: "2.1" 
+  version: "2.2" 
 
 esphome:
   name: esp32-spa
@@ -61,6 +61,10 @@ text_sensor:
     parent_id: display_handler
     type: error_code
     name: "Spa Error Code"
+  - platform: inputs
+    parent_id: display_handler
+    type: spa_mode
+    name: "Spa Mode"
 
 # ===== HOT TUB DISPLAY INPUTS =====
 sensor:
