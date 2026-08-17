@@ -128,6 +128,8 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   // display and send the set temperature. We also update the timer when we auto-press.
   uint32_t last_set_sent_time_ms = 0;
   static constexpr uint32_t SET_FORCE_INTERVAL_MS = 6u * 60u * 60u * 1000u;  // 6 hours
+  static constexpr uint32_t STARTUP_IGNORE_MS = 30000;  // ignore startup display noise for first 30s
+  bool startup_ignore_logged_ = false;
   
   // Setters called from Python binding
   void set_measured_temp_sensor(esphome::sensor::Sensor *s) { measured_temp_sensor_ = s; }
@@ -250,49 +252,49 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
 
     // Press COOL/LIGHTS three times after boot to capture the mode and cycle it back to the original setting.
-    // First combo starts at 5.0s. Update the last_set_sent_time when the first temp press begins.
-    this->set_timeout("boot_press_cool_on", 5000, [this]() {
+    // Delay all startup actions until after startup ignore window.
+    this->set_timeout("boot_press_cool_on", STARTUP_IGNORE_MS + 5000, [this]() {
       ESP_LOGI(TAG, "Boot: auto-pressing COOL to initialize set temp");
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
       last_set_sent_time_ms = esphome::millis();
     });
-    this->set_timeout("boot_press_cool_off", 5200, []() {
+    this->set_timeout("boot_press_cool_off", STARTUP_IGNORE_MS + 5200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
-    this->set_timeout("boot_press_light_on",  6700, []() {
+    this->set_timeout("boot_press_light_on",  STARTUP_IGNORE_MS + 6700, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
     });
-    this->set_timeout("boot_press_light_off", 6900, []() {
+    this->set_timeout("boot_press_light_off", STARTUP_IGNORE_MS + 6900, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
     });
-    this->set_timeout("boot_press_cool_on_2", 8000, []() {
+    this->set_timeout("boot_press_cool_on_2", STARTUP_IGNORE_MS + 8000, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
     });
-    this->set_timeout("boot_press_cool_off_2", 8200, []() {
+    this->set_timeout("boot_press_cool_off_2", STARTUP_IGNORE_MS + 8200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
-    this->set_timeout("boot_press_light_on_2",  9700, []() {
+    this->set_timeout("boot_press_light_on_2",  STARTUP_IGNORE_MS + 9700, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
     });
-    this->set_timeout("boot_press_light_off_2", 9900, []() {
+    this->set_timeout("boot_press_light_off_2", STARTUP_IGNORE_MS + 9900, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
     });
-    this->set_timeout("boot_press_cool_on_3", 11000, []() {
+    this->set_timeout("boot_press_cool_on_3", STARTUP_IGNORE_MS + 11000, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
     });
-    this->set_timeout("boot_press_cool_off_3", 11200, []() {
+    this->set_timeout("boot_press_cool_off_3", STARTUP_IGNORE_MS + 11200, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
     });
-    this->set_timeout("boot_press_light_on_3",  12700, []() {
+    this->set_timeout("boot_press_light_on_3",  STARTUP_IGNORE_MS + 12700, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
     });
-    this->set_timeout("boot_press_light_off_3", 12900, []() {
+    this->set_timeout("boot_press_light_off_3", STARTUP_IGNORE_MS + 12900, []() {
       gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
     });
 
     // If startup mode detection found Sleep, briefly move to Economy to expose measured temp,
     // then return to Sleep after 6 seconds.
-    this->set_timeout("boot_sleep_mode_refresh_check", 14000, [this]() {
+    this->set_timeout("boot_sleep_mode_refresh_check", STARTUP_IGNORE_MS + 14000, [this]() {
       if (last_mode_ != "Sleep") return;
 
       ESP_LOGI(TAG, "Boot: mode is Sleep; switching to Economy for 6s to refresh measured temp");
@@ -341,6 +343,24 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
 
   void loop() override {
     uint32_t now = esphome::millis();
+
+    // Ignore all incoming display frames during startup to avoid publishing transient values.
+    if (now < STARTUP_IGNORE_MS) {
+      if (!startup_ignore_logged_) {
+        ESP_LOGI(TAG, "Startup guard active for %u ms: ignoring incoming display frames", static_cast<unsigned>(STARTUP_IGNORE_MS));
+        startup_ignore_logged_ = true;
+      }
+      portENTER_CRITICAL(&spinlock_);
+      frame_ready = false;
+      completed_bits = 0;
+      completed_frame = 0;
+      partial_frame_count = 0;
+      bit_count = 0;
+      shift_reg = 0;
+      last_frame_valid = false;
+      portEXIT_CRITICAL(&spinlock_);
+      return;
+    }
 
     // Report any partial/incomplete frames detected by ISR since last check
     uint32_t partials = 0;

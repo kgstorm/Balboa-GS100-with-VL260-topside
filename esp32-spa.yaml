@@ -1,5 +1,5 @@
 substitutions:
-  version: "2.7" 
+  version: "2.8" 
 
 esphome:
   name: esp32-spa
@@ -64,6 +64,7 @@ text_sensor:
   - platform: inputs
     parent_id: display_handler
     type: spa_mode
+    id: spa_mode_state
     name: "Spa Mode"
 
 # ===== HOT TUB DISPLAY INPUTS =====
@@ -120,6 +121,60 @@ select:
       - globals.set:
           id: display_is_fahrenheit
           value: !lambda 'return x == "°F";'
+
+  - platform: template
+    name: "Spa Heating Mode"
+    id: spa_heating_mode
+    icon: "mdi:hot-tub"
+    options:
+      - "Standard"
+      - "Economy"
+      - "Sleep"
+    optimistic: false
+    lambda: |-
+      if (id(spa_mode_state).state == "Standard") return std::string("Standard");
+      if (id(spa_mode_state).state == "Economy") return std::string("Economy");
+      if (id(spa_mode_state).state == "Sleep") return std::string("Sleep");
+      return {};
+    set_action:
+      - if:
+          condition:
+            lambda: 'return id(spa_mode_state).state == x;'
+          then:
+            - logger.log: "Mode already at requested value"
+          else:
+            - repeat:
+                count: 8
+                then:
+                  - if:
+                      condition:
+                        lambda: 'return id(spa_mode_state).state != x;'
+                      then:
+                        - script.execute: spa_mode_step
+            - if:
+                condition:
+                  lambda: 'return id(spa_mode_state).state == x;'
+                then:
+                  - logger.log:
+                      format: "Mode set succeeded: %s"
+                      args: ['x.c_str()']
+                else:
+                  - logger.log:
+                      format: "Mode set failed after retries. target=%s current=%s"
+                      args: ['x.c_str()', 'id(spa_mode_state).state.c_str()']
+
+script:
+  - id: spa_mode_step
+    mode: queued
+    then:
+      - output.turn_on: spa_warm_out
+      - delay: 100ms
+      - output.turn_off: spa_warm_out
+      - delay: 500ms
+      - output.turn_on: spa_lights_out
+      - delay: 100ms
+      - output.turn_off: spa_lights_out
+      - delay: 1000ms
 
 # ===== BUTTONS (GPIO outputs) =====
 output:
