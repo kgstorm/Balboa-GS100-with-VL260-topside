@@ -1,5 +1,5 @@
 substitutions:
-  version: "2.8" 
+  version: "2.8"
 
 esphome:
   name: esp32-spa
@@ -53,19 +53,36 @@ globals:
     restore_value: true
     initial_value: 'false'
 
+  - id: spa_mode_target
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
 external_components:
   - source: esp32-spa
-  
+
 text_sensor:
   - platform: inputs
     parent_id: display_handler
     type: error_code
     name: "Spa Error Code"
+
   - platform: inputs
     parent_id: display_handler
     type: spa_mode
     id: spa_mode_state
     name: "Spa Mode"
+    on_value:
+      - if:
+          condition:
+            not:
+              script.is_running: spa_mode_worker
+          then:
+            - lambda: |-
+                if (x == "Standard" || x == "Economy" || x == "Sleep") {
+                  id(spa_heating_mode).publish_state(x);
+                  id(spa_mode_target) = x;
+                }
 
 # ===== HOT TUB DISPLAY INPUTS =====
 sensor:
@@ -97,10 +114,12 @@ binary_sensor:
     parent_id: display_handler
     type: heater
     name: "Spa Heater Status"
+
   - platform: inputs
     parent_id: display_handler
     type: pump
     name: "Spa Pump Status"
+
   - platform: inputs
     parent_id: display_handler
     type: light
@@ -131,41 +150,53 @@ select:
       - "Economy"
       - "Sleep"
     optimistic: false
-    lambda: |-
-      if (id(spa_mode_state).state == "Standard") return std::string("Standard");
-      if (id(spa_mode_state).state == "Economy") return std::string("Economy");
-      if (id(spa_mode_state).state == "Sleep") return std::string("Sleep");
-      return {};
+
     set_action:
-      - if:
-          condition:
-            lambda: 'return id(spa_mode_state).state == x;'
-          then:
-            - logger.log: "Mode already at requested value"
-          else:
-            - repeat:
-                count: 8
-                then:
-                  - if:
-                      condition:
-                        lambda: 'return id(spa_mode_state).state != x;'
-                      then:
-                        - script.execute: spa_mode_step
-            - if:
-                condition:
-                  lambda: 'return id(spa_mode_state).state == x;'
-                then:
-                  - logger.log:
-                      format: "Mode set succeeded: %s"
-                      args: ['x.c_str()']
-                else:
-                  - logger.log:
-                      format: "Mode set failed after retries. target=%s current=%s"
-                      args: ['x.c_str()', 'id(spa_mode_state).state.c_str()']
+      # Store the latest requested mode and immediately show it
+      # in Home Assistant/Homey.
+      - lambda: |-
+          id(spa_mode_target) = x;
+          id(spa_heating_mode).publish_state(x);
+
+      # The worker always works towards the latest target.
+      - script.execute: spa_mode_worker
 
 script:
-  - id: spa_mode_step
+  # Move the spa towards the latest requested heating mode.
+  - id: spa_mode_worker
     mode: queued
+    max_runs: 2
+    then:
+      - repeat:
+          count: 8
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(spa_mode_state).state != id(spa_mode_target);
+                then:
+                  - script.execute: spa_mode_step
+                  - script.wait: spa_mode_step
+
+      # If the target was not reached after all retries,
+      # restore the dropdown to the actual spa state.
+      - if:
+          condition:
+            lambda: |-
+              return id(spa_mode_state).state != id(spa_mode_target);
+          then:
+            - lambda: |-
+                const auto mode = id(spa_mode_state).state;
+                if (mode == "Standard" ||
+                    mode == "Economy" ||
+                    mode == "Sleep") {
+                  id(spa_heating_mode).publish_state(mode);
+                  id(spa_mode_target) = mode;
+                }
+
+  # One physical Warm + Light mode-change sequence.
+  - id: spa_mode_step
+    mode: single
     then:
       - output.turn_on: spa_warm_out
       - delay: 100ms
@@ -182,14 +213,17 @@ output:
     id: spa_warm_out
     pin: 25
     inverted: false
+
   - platform: gpio
     id: spa_cool_out
     pin: 26
     inverted: false
+
   - platform: gpio
     id: spa_lights_out
     pin: 27
     inverted: false
+
   - platform: gpio
     id: spa_pumps_out
     pin: 32
@@ -231,3 +265,4 @@ button:
       - output.turn_on: spa_pumps_out
       - delay: 100ms
       - output.turn_off: spa_pumps_out
+        
