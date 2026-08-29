@@ -1,5 +1,5 @@
 substitutions:
-  version: "2.8"
+  version: "2.8" 
 
 esphome:
   name: esp32-spa
@@ -114,12 +114,10 @@ binary_sensor:
     parent_id: display_handler
     type: heater
     name: "Spa Heater Status"
-
   - platform: inputs
     parent_id: display_handler
     type: pump
     name: "Spa Pump Status"
-
   - platform: inputs
     parent_id: display_handler
     type: light
@@ -164,8 +162,7 @@ select:
 script:
   # Move the spa towards the latest requested heating mode.
   - id: spa_mode_worker
-    mode: queued
-    max_runs: 2
+    mode: single
     then:
       - repeat:
           count: 8
@@ -213,17 +210,14 @@ output:
     id: spa_warm_out
     pin: 25
     inverted: false
-
   - platform: gpio
     id: spa_cool_out
     pin: 26
     inverted: false
-
   - platform: gpio
     id: spa_lights_out
     pin: 27
     inverted: false
-
   - platform: gpio
     id: spa_pumps_out
     pin: 32
@@ -265,4 +259,3 @@ button:
       - output.turn_on: spa_pumps_out
       - delay: 100ms
       - output.turn_off: spa_pumps_out
-        
