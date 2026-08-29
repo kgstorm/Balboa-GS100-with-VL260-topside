@@ -13,7 +13,13 @@ This project adds an Wifi module to a Balboa Hot Tub. This project has been test
 
 ## Purchase Option
 
-Everything you need to know to build a module is contained in this repository. However, I do have some modules available for purchase as well.
+ If have modules available for purchase. If interested, please email me at kevin.storm@gmail.com. 
+
+---
+
+## PCB and Project Box Fabrication
+
+The PCB and Project Box files are located in the Production directory. I used JLCPCB to order the PCBs. You should be able to easily order your own PCBs from that website with the provided files. 
 
 ---
 
