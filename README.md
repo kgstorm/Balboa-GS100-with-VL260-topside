@@ -110,6 +110,25 @@ This integration exposes a `text_sensor` for the current heating mode (`sensor.<
 
 The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Cool button followed by the Light button.
 
+## Home Assistant Entities
+
+The device exposes the following entities in Home Assistant:
+
+- `sensor.<device_name>_spa_measured_temp` — current water temperature
+- `sensor.<device_name>_spa_set_temp` — current set temperature
+- `binary_sensor.<device_name>_spa_heater_status` — heater on/off
+- `binary_sensor.<device_name>_spa_pump_status` — pump/jets on/off
+- `binary_sensor.<device_name>_spa_light_status` — light on/off
+- `text_sensor.<device_name>_spa_error_code` — current error code with friendly translation
+- `text_sensor.<device_name>_spa_mode` — current heating mode (`Standard`, `Economy`, `Sleep`)
+- `sensor.<device_name>_spa_filter_mode` — current filter mode
+- `select.<device_name>_spa_filter_cycle` — filter cycle selector
+- `select.<device_name>_spa_display_unit` — temperature unit selector (`°C` / `°F`)
+- `select.<device_name>_spa_heating_mode` — heating mode selector (`Standard`, `Economy`, `Sleep`)
+- `button.<device_name>_spa_warm` — virtual warm button press
+- `button.<device_name>_spa_cool` — virtual cool button press
+- `button.<device_name>_spa_lights` — virtual lights button press
+- `button.<device_name>_spa_pumps` — virtual pumps/jets button press
 
 ### Example Home Assistant automation (mobile push notification)
 
