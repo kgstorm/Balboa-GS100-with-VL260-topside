@@ -8,6 +8,12 @@ esphome:
     name: "kgstorm.esp32-spa"
     version: ${version}
 
+  on_boot:
+    priority: -100
+    then:
+      - delay: 65s
+      - script.execute: filter_cycle_read
+
 esp32:
   board: esp32dev
   framework:
@@ -58,6 +64,11 @@ globals:
     restore_value: false
     initial_value: '""'
 
+  - id: filter_cycle_target
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
 external_components:
   - source: esp32-spa
 
@@ -82,6 +93,24 @@ text_sensor:
                 if (x == "Standard" || x == "Economy" || x == "Sleep") {
                   id(spa_heating_mode).publish_state(x);
                   id(spa_mode_target) = x;
+                }
+
+  - platform: inputs
+    parent_id: display_handler
+    type: filter_cycle
+    id: spa_filter_cycle_state
+    name: "Spa Filter Cycle State"
+    on_value:
+      - if:
+          condition:
+            not:
+              script.is_running: filter_cycle_worker
+          then:
+            - lambda: |-
+                if (x == "F1" || x == "F2" || x == "F3" || x == "F4" ||
+                    x == "F5" || x == "F6" || x == "F7" || x == "F8") {
+                  id(spa_filter_cycle).publish_state(x);
+                  id(filter_cycle_target) = x;
                 }
 
 # ===== HOT TUB DISPLAY INPUTS =====
@@ -159,6 +188,30 @@ select:
       # The worker always works towards the latest target.
       - script.execute: spa_mode_worker
 
+  - platform: template
+    name: "Spa Filter Cycle"
+    id: spa_filter_cycle
+    icon: "mdi:filter"
+    options:
+      - "F1"
+      - "F2"
+      - "F3"
+      - "F4"
+      - "F5"
+      - "F6"
+      - "F7"
+      - "F8"
+    optimistic: false
+
+    set_action:
+      # Store the requested filter cycle and immediately show it
+      # in Home Assistant/Homey.
+      - lambda: |-
+          id(filter_cycle_target) = x;
+          id(spa_filter_cycle).publish_state(x);
+
+      - script.execute: filter_cycle_worker
+
 script:
   # Move the spa towards the latest requested heating mode.
   - id: spa_mode_worker
@@ -203,6 +256,89 @@ script:
       - delay: 100ms
       - output.turn_off: spa_lights_out
       - delay: 1000ms
+
+  # Read the current filter cycle without changing it.
+  - id: filter_cycle_read
+    mode: single
+    then:
+      # COOL
+      - output.turn_on: spa_cool_out
+      - delay: 100ms
+      - output.turn_off: spa_cool_out
+      - delay: 500ms
+
+      # JETS: enter filter-cycle menu.
+      - output.turn_on: spa_pumps_out
+      - delay: 100ms
+      - output.turn_off: spa_pumps_out
+      - delay: 1500ms
+
+      # JETS: leave filter-cycle menu without changing the value.
+      - output.turn_on: spa_pumps_out
+      - delay: 100ms
+      - output.turn_off: spa_pumps_out
+      - delay: 500ms
+
+  # Enter the filter menu, move to the requested F1-F8 setting,
+  # then leave the menu with JETS.
+  - id: filter_cycle_worker
+    mode: single
+    then:
+      # COOL
+      - output.turn_on: spa_cool_out
+      - delay: 100ms
+      - output.turn_off: spa_cool_out
+      - delay: 500ms
+
+      # JETS: enter filter-cycle menu.
+      - output.turn_on: spa_pumps_out
+      - delay: 100ms
+      - output.turn_off: spa_pumps_out
+      - delay: 1500ms
+
+      # Step through F1-F8 until the requested value is displayed.
+      - repeat:
+          count: 8
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(spa_filter_cycle_state).state != id(filter_cycle_target);
+                then:
+                  - script.execute: filter_cycle_step
+                  - script.wait: filter_cycle_step
+
+      # JETS: leave filter-cycle menu.
+      - output.turn_on: spa_pumps_out
+      - delay: 100ms
+      - output.turn_off: spa_pumps_out
+      - delay: 500ms
+
+      # If the requested value was not reached, restore the selector
+      # to the value actually observed on the spa display.
+      - if:
+          condition:
+            lambda: |-
+              return id(spa_filter_cycle_state).state != id(filter_cycle_target);
+          then:
+            - lambda: |-
+                const auto filter = id(spa_filter_cycle_state).state;
+                if (filter == "F1" || filter == "F2" ||
+                    filter == "F3" || filter == "F4" ||
+                    filter == "F5" || filter == "F6" ||
+                    filter == "F7" || filter == "F8") {
+                  id(spa_filter_cycle).publish_state(filter);
+                  id(filter_cycle_target) = filter;
+                }
+
+  # One physical WARM press while inside the filter-cycle menu.
+  - id: filter_cycle_step
+    mode: single
+    then:
+      - output.turn_on: spa_warm_out
+      - delay: 100ms
+      - output.turn_off: spa_warm_out
+      - delay: 750ms
 
 # ===== BUTTONS (GPIO outputs) =====
 output:
@@ -259,3 +395,4 @@ button:
       - output.turn_on: spa_pumps_out
       - delay: 100ms
       - output.turn_off: spa_pumps_out
+

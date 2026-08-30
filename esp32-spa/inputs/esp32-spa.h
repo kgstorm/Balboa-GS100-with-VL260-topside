@@ -105,6 +105,13 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   uint8_t stable_mode_ = 0;
   static constexpr uint8_t MODE_STABLE_THRESHOLD = 3;
 
+  // Filter cycle text sensor and state (F + digit)
+  esphome::text_sensor::TextSensor *filter_cycle_text_sensor_ = nullptr;
+  std::string last_filter_cycle_ = "";
+  std::string candidate_filter_cycle_ = "";
+  uint8_t stable_filter_cycle_ = 0;
+  static constexpr uint8_t FILTER_STABLE_THRESHOLD = 3;
+
   static constexpr uint32_t HEARTBEAT_MS = 30000;  // heartbeat every 30s (publish if unchanged)
   // Gap threshold (ms) to consider the start of a new frame (use ~15ms to match ~19ms observed gap)
   static constexpr uint32_t FRAME_GAP_MS =5;
@@ -136,6 +143,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   void set_set_temp_sensor(esphome::sensor::Sensor *s) { set_temp_sensor_ = s; }
   void set_error_text_sensor(esphome::text_sensor::TextSensor *s) { error_text_sensor_ = s; }
   void set_spa_mode_text_sensor(esphome::text_sensor::TextSensor *s) { spa_mode_text_sensor_ = s; }
+  void set_filter_cycle_text_sensor(esphome::text_sensor::TextSensor *s) { filter_cycle_text_sensor_ = s; }
 
   // Binary sensor setters
   void set_heater_sensor(esphome::binary_sensor::BinarySensor *s) { heater_sensor_ = s; }
@@ -468,8 +476,9 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
         if (seen_p4_ && pump_sensor_ && last_pump >= 0) { pump_sensor_->publish_state(static_cast<bool>(last_pump)); }
         if (seen_p4_ && light_sensor_ && last_light >= 0) { light_sensor_->publish_state(static_cast<bool>(last_light)); }
         if (spa_mode_text_sensor_ && !last_mode_.empty()) { spa_mode_text_sensor_->publish_state(last_mode_); }
+        if (filter_cycle_text_sensor_ && !last_filter_cycle_.empty()) { filter_cycle_text_sensor_->publish_state(last_filter_cycle_); }
 
-        ESP_LOGI(TAG, "Heartbeat publish (stored): measured=%d set=%d heater=%d pump=%d light=%d mode=%s", last_measured_temp, last_set_temp, last_heater, last_pump, last_light, last_mode_.c_str());
+        ESP_LOGI(TAG, "Heartbeat publish (stored): measured=%d set=%d heater=%d pump=%d light=%d mode=%s filter=%s", last_measured_temp, last_set_temp, last_heater, last_pump, last_light, last_mode_.c_str(), last_filter_cycle_.c_str());
 
         last_publish_time = now;
         return;
@@ -521,12 +530,14 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       bool is_mode_hb = (c2_hb == 'S' && c3_hb == 't') ||
                         (c2_hb == 'E' && c3_hb == 'c') ||
                         (c2_hb == 'S' && c3_hb == 'L');
+      bool is_filter_hb = (c2_hb == 'F' && digit3 >= 0);
 
-      // Publish mode heartbeat
+      // Publish mode/filter heartbeat
       if (spa_mode_text_sensor_ && !last_mode_.empty()) { spa_mode_text_sensor_->publish_state(last_mode_); }
+      if (filter_cycle_text_sensor_ && !last_filter_cycle_.empty()) { filter_cycle_text_sensor_->publish_state(last_filter_cycle_); }
 
-      // If p2/p3 form a valid temperature or mode string, clear any previous error and skip error processing
-      if (temp >= 0 || is_mode_hb) {
+      // If p2/p3 form a valid temperature, mode string or filter-cycle string, clear any previous error and skip error processing
+      if (temp >= 0 || is_mode_hb || is_filter_hb) {
         if (!last_error_code_.empty()) {
           if (error_text_sensor_) error_text_sensor_->publish_state("");
           last_error_code_.clear(); candidate_error.clear(); stable_error = 0;
@@ -611,6 +622,10 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
                           (c2_char == 'E' && c3_char == 'c') ||  // Ec -> Economy
                           (c2_char == 'S' && c3_char == 'L');    // SL -> Sleep
 
+    // Detect filter-cycle strings shown in the filter menu: F followed by a digit.
+    // p2 is decoded as the letter F, while p3 is decoded numerically.
+    bool is_filter_string = (c2_char == 'F' && digit3 >= 0);
+
     // Treat blank (0x00) OR a mode string as a set-mode indicator for set-temp capture purposes
     bool is_set_indicator = is_zero || is_mode_string;
 
@@ -627,6 +642,9 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     }
     if (is_mode_string) {
       ESP_LOGD(TAG, "Mode string detected: '%c%c' p2=0x%02X p3=0x%02X", c2_char, c3_char, static_cast<unsigned>(p2), static_cast<unsigned>(p3));
+    }
+    if (is_filter_string) {
+      ESP_LOGD(TAG, "Filter cycle detected: F%d p2=0x%02X p3=0x%02X", digit3, static_cast<unsigned>(p2), static_cast<unsigned>(p3));
     }
 
     // Decode temperature if not a set indicator
@@ -671,10 +689,31 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       candidate_mode_.clear(); stable_mode_ = 0;
     }
 
+    // Publish filter cycle when a stable F + digit string is detected.
+    if (is_filter_string) {
+      std::string filter_str = "F" + std::to_string(digit3);
+
+      if (candidate_filter_cycle_ == filter_str) {
+        if (stable_filter_cycle_ < 255) stable_filter_cycle_++;
+      } else {
+        candidate_filter_cycle_ = filter_str;
+        stable_filter_cycle_ = 1;
+      }
+
+      if (stable_filter_cycle_ >= FILTER_STABLE_THRESHOLD && filter_str != last_filter_cycle_) {
+        last_filter_cycle_ = filter_str;
+        if (filter_cycle_text_sensor_) filter_cycle_text_sensor_->publish_state(last_filter_cycle_);
+        ESP_LOGI(TAG, "Filter cycle published: %s", last_filter_cycle_.c_str());
+      }
+    } else {
+      candidate_filter_cycle_.clear();
+      stable_filter_cycle_ = 0;
+    }
+
     // Decode/publish any error-code text (p2/p3) but only after it is stable and looks like an error
     if (error_text_sensor_) {
-      // If temperature or mode string — not an error
-      if (temp >= 0 || is_mode_string) {
+      // If temperature, mode string or filter-cycle string — not an error
+      if (temp >= 0 || is_mode_string || is_filter_string) {
         candidate_error.clear(); stable_error = 0;
       } else {
         std::string code = "";
@@ -970,3 +1009,4 @@ extern "C" void IRAM_ATTR esp32_spa_isr_wrapper(void* arg) {
   auto *self = static_cast<esp32_spa::HotTubDisplaySensor*>(arg);
   if (self) self->handle_isr();
 }
+
