@@ -7,7 +7,7 @@
 
 ## Description
 
-This project adds an Wifi module to a Balboa Hot Tub. This project has been tested with a few Balboa control boards and seems to work with any VL200 series or VL400 series topside controllers. I imagine any 3 or 4-button Balboa topside controllers with RJ45 connectors would have a very similar setup. 
+This project adds an Wifi module to a Balboa Hot Tub. This project has been tested with a few Balboa control boards and seems to work with any VL200 series or VL400 series topside controllers. I imagine any 3 or 4-button Balboa topside controllers with RJ45 connectors would have a very similar setup. If your topside controller has a single 'Temp' button instead of Cool and Warm buttons, refer to this slightly modified repo: https://github.com/kgstorm/Balboa-GS5xx
 
 ---
 
