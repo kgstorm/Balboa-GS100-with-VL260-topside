@@ -125,8 +125,12 @@ The device exposes the following entities in Home Assistant:
 - `select.<device_name>_spa_filter_cycle` — filter cycle selector
 - `select.<device_name>_spa_display_unit` — temperature unit selector (`°C` / `°F`)
 - `select.<device_name>_spa_heating_mode` — heating mode selector (`Standard`, `Economy`, `Sleep`)
+- `number.<device_name>_spa_high_temperature` — configurable high preset (15-105 in the selected display unit)
+- `number.<device_name>_spa_low_temperature` — configurable low preset (15-105 in the selected display unit)
 - `button.<device_name>_spa_warm` — virtual warm button press
 - `button.<device_name>_spa_cool` — virtual cool button press
+- `button.<device_name>_set_spa_high` — apply the configured high temperature preset
+- `button.<device_name>_set_spa_low` — apply the configured low temperature preset
 - `button.<device_name>_spa_lights` — virtual lights button press
 - `button.<device_name>_spa_pumps` — virtual pumps/jets button press
 

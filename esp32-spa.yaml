@@ -1,5 +1,5 @@
 substitutions:
-  version: "3.0" 
+  version: "3.1"
 
 esphome:
   name: esp32-spa
@@ -151,6 +151,29 @@ binary_sensor:
     parent_id: display_handler
     type: light
     name: "Spa Light Status"
+
+number:
+  - platform: template
+    name: "Spa High Temperature"
+    id: spa_high_target_temp
+    icon: "mdi:thermometer-high"
+    min_value: 15
+    max_value: 105
+    step: 1
+    initial_value: 37
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Spa Low Temperature"
+    id: spa_low_target_temp
+    icon: "mdi:thermometer-low"
+    min_value: 15
+    max_value: 105
+    step: 1
+    initial_value: 26
+    restore_value: true
+    optimistic: true
 
 select:
   - platform: template
@@ -340,6 +363,29 @@ script:
       - output.turn_off: spa_warm_out
       - delay: 750ms
 
+  - id: set_spa_target_temp
+    mode: restart
+    parameters:
+      target_temp: float
+    then:
+      - repeat:
+          count: 30
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return abs(id(spa_set_temp).state - target_temp) > 0.5f;
+                then:
+                  - if:
+                      condition:
+                        lambda: |-
+                          return id(spa_set_temp).state < target_temp;
+                      then:
+                        - button.press: btn_warm
+                      else:
+                        - button.press: btn_cool
+                  - delay: 800ms
+
 # ===== BUTTONS (GPIO outputs) =====
 output:
   - platform: gpio
@@ -361,6 +407,7 @@ output:
 
 button:
   - platform: template
+    id: btn_warm
     name: "Spa Warm"
     icon: "mdi:thermometer-plus"
     on_press:
@@ -370,6 +417,7 @@ button:
       - output.turn_off: spa_warm_out
 
   - platform: template
+    id: btn_cool
     name: "Spa Cool"
     icon: "mdi:thermometer-minus"
     on_press:
@@ -395,4 +443,24 @@ button:
       - output.turn_on: spa_pumps_out
       - delay: 100ms
       - output.turn_off: spa_pumps_out
+
+  - platform: template
+    name: "Set Spa High"
+    icon: "mdi:thermometer-high"
+    on_press:
+      - script.execute:
+          id: set_spa_target_temp
+          target_temp: !lambda |-
+            const float target = id(spa_high_target_temp).state;
+            return id(display_is_fahrenheit) ? (target - 32.0f) * 5.0f / 9.0f : target;
+
+  - platform: template
+    name: "Set Spa Low"
+    icon: "mdi:thermometer-low"
+    on_press:
+      - script.execute:
+          id: set_spa_target_temp
+          target_temp: !lambda |-
+            const float target = id(spa_low_target_temp).state;
+            return id(display_is_fahrenheit) ? (target - 32.0f) * 5.0f / 9.0f : target;
 
