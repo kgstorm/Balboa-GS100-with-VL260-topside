@@ -19,7 +19,7 @@ This project adds an Wifi module to a Balboa Hot Tub. This project has been test
 
 ## PCB and Project Box Fabrication
 
-The PCB and Project Box files are located in the Production directory. I used JLCPCB to order the PCBs. You should be able to easily order your own PCBs from that website with the provided files. 
+The PCB and Project Box files are located in the Production directory. I used JLCPCB to order the PCBs. You should be able to easily order your own PCBs from that website with the provided files. If you use this PCB, I recommend using an ESP32 Devkit V1.
 
 ---
 
