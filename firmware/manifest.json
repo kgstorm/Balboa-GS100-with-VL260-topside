@@ -1,14 +1,14 @@
 {
   "name": "kgstorm.esp32-spa",
-  "version": "3.0",
+  "version": "3.1",
   "builds": [
     {
       "chipFamily": "ESP32",
       "ota": {
-        "md5": "f28b4aae8e8af4983168a3080e8cf131",
-        "path": "esp32-spa-3.0.bin",
+        "md5": "eefa6dba04f4ede1583e90ec18d3bfe4",
+        "path": "esp32-spa-3.1.bin",
         "summary": "See release notes for details.",
-        "release_url": "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside/releases/tag/v3.0"
+        "release_url": "https://github.com/kgstorm/Balboa-GS100-with-VL260-topside/releases/tag/v3.1"
       }
     }
   ]
