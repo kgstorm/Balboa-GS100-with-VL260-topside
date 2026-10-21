@@ -91,7 +91,7 @@ heating_mode_enable_entity: 'switch.esp32_spa_spa_heating_mode_control' # option
 
 ```
 
-The `Spa Heating Mode Control` and `Spa Filter Cycle Control` switches default to enabled and restore their last state after reboot. Turning either off prevents its related button presses, including the automatic boot-time read. Set `heating_mode_enable_entity` to the actual heating-mode control switch entity to hide the card's mode buttons when disabled; the filter-cycle selector remains an entity and is not displayed on this card.
+The `Spa Heating Mode Control` and `Spa Filter Cycle Control` switches default to enabled and restore their last state after reboot. Turning either off prevents its related button presses and automatic read. When heating-mode control is off, the periodic set-temp refresh still sends a single Temp press; it suppresses the additional presses used for mode detection. Set `heating_mode_enable_entity` to the actual heating-mode control switch entity to hide the card's mode buttons when disabled; the filter-cycle selector remains an entity and is not displayed on this card.
 
 If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or clear the browser cache.
 
@@ -111,7 +111,9 @@ If the card doesn't appear immediately, try a hard-refresh (Ctrl/Cmd+Shift+R) or
 
 This integration exposes a `text_sensor` for the current heating mode (`sensor.<device_name>_spa_mode`). The possible states are **Standard**, **Economy**, and **Sleep**. Standard mode turns the heater and circulation pump on whenever the measured temperature drops below the set temperature. Economy only heats when the circulation pumps are programmed to run. Sleep mode also only heats when the circulation pumps are programmed to run, but also only heats to ~10C/20F below the set temperature. 
 
-The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 30 minutes) by pressing the Cool button followed by the Light button.
+The mode is detected by reading the 7-segment display characters `St`, `Ec`, or `SL` that the Balboa controller briefly shows during mode selection. The device automatically reads the current mode on boot (and every 6 hours) by pressing the Cool button followed by the Light button.
+
+Some Balboa topsides do not implement heating-mode selection at all. On those panels the injected Light press is not consumed as a mode command: it simply cycles the lighting colours, and the Cool press that follows lands inside the set-temp flash window and shifts the setpoint. If your panel does not respond to a manual Temp+Light press, turn `Spa Heating Mode Control` off.
 
 ## Home Assistant Entities
 

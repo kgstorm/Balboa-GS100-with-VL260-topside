@@ -1,5 +1,5 @@
 substitutions:
-  version: "3.3"
+  version: "3.4"
 
 esphome:
   name: esp32-spa
@@ -268,6 +268,18 @@ switch:
     icon: "mdi:hot-tub"
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
+
+    # Mirror the switch into the C++ component. The YAML guards below only cover
+    # the scripts; the 6h set-temp auto-refresh in esp32-spa.h injects its own
+    # Temp+Light combo and can only be reached through this flag. These triggers
+    # also fire on boot when restore_mode restores the saved state.
+    on_turn_on:
+      - lambda: |-
+          id(display_handler).mode_control_enabled = true;
+    on_turn_off:
+      - lambda: |-
+          id(display_handler).mode_control_enabled = false;
+          ESP_LOGI("spa", "Heating mode control disabled - Temp+Light combos suppressed");
 
   - platform: template
     name: "Spa Filter Cycle Control"

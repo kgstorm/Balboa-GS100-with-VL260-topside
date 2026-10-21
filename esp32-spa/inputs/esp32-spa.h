@@ -98,6 +98,13 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
   // Error code stability tracking
   std::string candidate_error = ""; uint8_t stable_error = 0;
 
+  // When false, the component never injects the Temp+Light combo used to read or
+  // change the heating mode. Driven from YAML by the "Spa Heating Mode Control"
+  // switch, which otherwise only reaches the scripts, not this class.
+  // Panels that do not implement mode selection treat every injected Light press
+  // as a lighting colour/mode change, so the combo must be suppressed there.
+  bool mode_control_enabled = true;
+
   // Spa mode text sensor and state
   esphome::text_sensor::TextSensor *spa_mode_text_sensor_ = nullptr;
   std::string last_mode_ = "";
@@ -262,6 +269,7 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
     // If startup mode detection found Sleep, briefly move to Economy to expose measured temp,
     // then return to Sleep after 6 seconds.
     this->set_timeout("boot_sleep_mode_refresh_check", STARTUP_IGNORE_MS + 14000, [this]() {
+      if (!mode_control_enabled) return;
       if (last_mode_ != "Sleep") return;
 
       ESP_LOGI(TAG, "Boot: mode is Sleep; switching to Economy for 6s to refresh measured temp");
@@ -351,68 +359,75 @@ class HotTubDisplaySensor : public esphome::Component, public esphome::sensor::S
       // capture the current mode and cycle it back to the original setting.
       if ((now - last_set_sent_time_ms) >= SET_FORCE_INTERVAL_MS) {
         ESP_LOGI(TAG, "No set-temp captured for %ums — auto-pressing COOL to refresh set temp", static_cast<unsigned>(now - last_set_sent_time_ms));
-        // Activate the physical COOL press (use balboa pin macro)
+        // A single Temp press only *displays* the set temperature; it never changes it.
         gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
         // Ensure we release it after a short duration (mirror existing press timing)
         this->set_timeout("auto_press_cool", 200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on",  1700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off", 1900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
-        this->set_timeout("auto_press_cool_2", 3000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
-        this->set_timeout("auto_press_cool_off_2", 3200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on_2", 4700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off_2", 4900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
-        this->set_timeout("auto_press_cool_3", 6000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
-        this->set_timeout("auto_press_cool_off_3", 6200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
-        this->set_timeout("auto_press_light_on_3", 7700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
-        this->set_timeout("auto_press_light_off_3", 7900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+        // The remaining COOL presses and every LIGHT press exist only to re-read the
+        // heating mode. On panels without mode selection a LIGHT press merely cycles the
+        // lighting, and the extra COOL presses land inside the set-temp flash window and
+        // shift the setpoint - so skip the whole combo when mode control is disabled.
+        if (mode_control_enabled) {
+          this->set_timeout("auto_press_light_on",  1700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
+          this->set_timeout("auto_press_light_off", 1900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+          this->set_timeout("auto_press_cool_2", 3000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
+          this->set_timeout("auto_press_cool_off_2", 3200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
+          this->set_timeout("auto_press_light_on_2", 4700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
+          this->set_timeout("auto_press_light_off_2", 4900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
+          this->set_timeout("auto_press_cool_3", 6000, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1); });
+          this->set_timeout("auto_press_cool_off_3", 6200, [](){ gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0); });
+          this->set_timeout("auto_press_light_on_3", 7700, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1); });
+          this->set_timeout("auto_press_light_off_3", 7900, []() { gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0); });
 
-        // If the newly detected mode is Sleep, briefly move to Economy so measured temp is visible,
-        // then restore Sleep after 6 seconds.
-        this->set_timeout("auto_sleep_mode_refresh_check", 9000, [this]() {
-          if (last_mode_ != "Sleep") return;
+          // If the newly detected mode is Sleep, briefly move to Economy so measured temp is visible,
+          // then restore Sleep after 6 seconds.
+          this->set_timeout("auto_sleep_mode_refresh_check", 9000, [this]() {
+            if (!mode_control_enabled) return;
+            if (last_mode_ != "Sleep") return;
 
-          ESP_LOGI(TAG, "Auto-refresh: mode is Sleep; switching to Economy for 6s to refresh measured temp");
-          this->set_timeout("auto_sleep_to_ec_cool_on", 0, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
-          });
-          this->set_timeout("auto_sleep_to_ec_cool_off", 200, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
-          });
-          this->set_timeout("auto_sleep_to_ec_light_on", 1700, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
-          });
-          this->set_timeout("auto_sleep_to_ec_light_off", 1900, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
-          });
+            ESP_LOGI(TAG, "Auto-refresh: mode is Sleep; switching to Economy for 6s to refresh measured temp");
+            this->set_timeout("auto_sleep_to_ec_cool_on", 0, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
+            });
+            this->set_timeout("auto_sleep_to_ec_cool_off", 200, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
+            });
+            this->set_timeout("auto_sleep_to_ec_light_on", 1700, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+            });
+            this->set_timeout("auto_sleep_to_ec_light_off", 1900, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+            });
 
-          // Hold Economy for 6 seconds, then move back to Sleep.
-          this->set_timeout("auto_ec_to_sleep_cool_on", 7900, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
-          });
-          this->set_timeout("auto_ec_to_sleep_cool_off", 8100, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
-          });
-          this->set_timeout("auto_ec_to_sleep_light_on", 9600, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
-          });
-          this->set_timeout("auto_ec_to_sleep_light_off", 9800, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
-          });
+            // Hold Economy for 6 seconds, then move back to Sleep.
+            this->set_timeout("auto_ec_to_sleep_cool_on", 7900, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
+            });
+            this->set_timeout("auto_ec_to_sleep_cool_off", 8100, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
+            });
+            this->set_timeout("auto_ec_to_sleep_light_on", 9600, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+            });
+            this->set_timeout("auto_ec_to_sleep_light_off", 9800, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+            });
 
-          // One more cycle is required to return to Sleep in a 3-mode ring.
-          this->set_timeout("auto_back_to_sleep_cool_on", 11700, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
+            // One more cycle is required to return to Sleep in a 3-mode ring.
+            this->set_timeout("auto_back_to_sleep_cool_on", 11700, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 1);
+            });
+            this->set_timeout("auto_back_to_sleep_cool_off", 11900, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
+            });
+            this->set_timeout("auto_back_to_sleep_light_on", 13400, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
+            });
+            this->set_timeout("auto_back_to_sleep_light_off", 13600, []() {
+              gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
+            });
           });
-          this->set_timeout("auto_back_to_sleep_cool_off", 11900, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN2, 0);
-          });
-          this->set_timeout("auto_back_to_sleep_light_on", 13400, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 1);
-          });
-          this->set_timeout("auto_back_to_sleep_light_off", 13600, []() {
-            gpio_set_level((gpio_num_t)PIN_WRITE_BTN3, 0);
-          });
-        });
+        }
 
         // Update timer to avoid repeated presses
         last_set_sent_time_ms = now;
