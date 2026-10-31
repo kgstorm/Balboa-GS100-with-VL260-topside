@@ -13,7 +13,7 @@ This project adds an Wifi module to a Balboa Hot Tub. This project has been test
 
 ## Purchase Option
 
- If have modules available for purchase. If interested, please email me at kevin.storm@gmail.com. 
+ I have modules available for purchase. If interested, please email Hayley at storm.automations@gmail.com 
 
 ---
 
