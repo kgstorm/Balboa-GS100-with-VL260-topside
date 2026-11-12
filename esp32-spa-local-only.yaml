@@ -1,0 +1,553 @@
+substitutions:
+  version: "3.4"
+
+esphome:
+  name: esp32-spa
+  friendly_name: esp32-spa
+  project:
+    name: "kgstorm.esp32-spa"
+    version: ${version}
+
+  on_boot:
+    priority: -100
+    then:
+      - delay: 35s
+      - if:
+          condition:
+            switch.is_on: spa_heating_mode_control
+          then:
+            - script.execute: spa_mode_boot_read
+            - script.wait: spa_mode_boot_read
+      - delay: 25s
+      - if:
+          condition:
+            switch.is_on: spa_filter_cycle_control
+          then:
+            - script.execute: filter_cycle_read
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret api_key
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+  - platform: http_request
+    id: ota_http
+
+wifi:
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Esp32-Spa Fallback Hotspot"
+    password: !secret ap_password
+
+captive_portal:
+
+logger:
+
+http_request:
+  useragent: esphome/esp32-spa
+  timeout: 20s
+  buffer_size_rx: 2048
+  buffer_size_tx: 1024
+  redirect_limit: 5
+
+update:
+  - platform: http_request
+    name: "Firmware Update"
+    source: https://kgstorm.github.io/Balboa-GS100-with-VL260-topside/firmware/manifest.json
+    update_interval: 6h
+
+globals:
+  - id: display_is_fahrenheit
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+
+  - id: spa_mode_target
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
+  - id: filter_cycle_target
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
+external_components:
+  - source: esp32-spa
+
+text_sensor:
+  - platform: inputs
+    parent_id: display_handler
+    type: error_code
+    name: "Spa Error Code"
+
+  - platform: inputs
+    parent_id: display_handler
+    type: spa_mode
+    id: spa_mode_state
+    name: "Spa Mode"
+    on_value:
+      - if:
+          condition:
+            not:
+              script.is_running: spa_mode_worker
+          then:
+            - lambda: |-
+                if (x == "Standard" || x == "Economy" || x == "Sleep") {
+                  id(spa_heating_mode).publish_state(x);
+                  id(spa_mode_target) = x;
+                }
+
+  - platform: inputs
+    parent_id: display_handler
+    type: filter_cycle
+    id: spa_filter_cycle_state
+    name: "Spa Filter Cycle State"
+    on_value:
+      - if:
+          condition:
+            not:
+              script.is_running: filter_cycle_worker
+          then:
+            - lambda: |-
+                if (x == "F1" || x == "F2" || x == "F3" || x == "F4" ||
+                    x == "F5" || x == "F6" || x == "F7" || x == "F8") {
+                  id(spa_filter_cycle).publish_state(x);
+                  id(filter_cycle_target) = x;
+                }
+
+# ===== HOT TUB DISPLAY INPUTS =====
+sensor:
+  - platform: inputs
+    id: display_handler
+    measured_temp:
+      name: "Spa Measured Temp"
+      id: spa_measured_temp
+      unit_of_measurement: "°C"
+      accuracy_decimals: 1
+      device_class: temperature
+      filters:
+        - lambda: |-
+            if (id(display_is_fahrenheit)) return (x - 32.0f) * 5.0f / 9.0f;
+            return x;
+    set_temp:
+      name: "Spa Set Temp"
+      id: spa_set_temp
+      unit_of_measurement: "°C"
+      accuracy_decimals: 1
+      device_class: temperature
+      filters:
+        - lambda: |-
+            if (id(display_is_fahrenheit)) return (x - 32.0f) * 5.0f / 9.0f;
+            return x;
+
+binary_sensor:
+  - platform: inputs
+    parent_id: display_handler
+    type: heater
+    name: "Spa Heater Status"
+  - platform: inputs
+    parent_id: display_handler
+    type: pump
+    name: "Spa Pump Status"
+  - platform: inputs
+    parent_id: display_handler
+    type: light
+    name: "Spa Light Status"
+
+number:
+  - platform: template
+    name: "Spa High Temperature"
+    id: spa_high_target_temp
+    icon: "mdi:thermometer-high"
+    min_value: 15
+    max_value: 105
+    step: 1
+    initial_value: 37
+    restore_value: true
+    optimistic: true
+
+  - platform: template
+    name: "Spa Low Temperature"
+    id: spa_low_target_temp
+    icon: "mdi:thermometer-low"
+    min_value: 15
+    max_value: 105
+    step: 1
+    initial_value: 26
+    restore_value: true
+    optimistic: true
+
+select:
+  - platform: template
+    name: "Spa Display Unit"
+    id: spa_display_unit
+    icon: "mdi:thermometer"
+    options:
+      - "°C"
+      - "°F"
+    initial_option: "°C"
+    restore_value: true
+    optimistic: true
+    on_value:
+      - globals.set:
+          id: display_is_fahrenheit
+          value: !lambda 'return x == "°F";'
+
+  - platform: template
+    name: "Spa Heating Mode"
+    id: spa_heating_mode
+    icon: "mdi:hot-tub"
+    options:
+      - "Standard"
+      - "Economy"
+      - "Sleep"
+    optimistic: false
+
+    set_action:
+      - if:
+          condition:
+            switch.is_on: spa_heating_mode_control
+          then:
+            - lambda: |-
+                id(spa_mode_target) = x;
+                id(spa_heating_mode).publish_state(x);
+            - script.execute: spa_mode_worker
+          else:
+            - lambda: |-
+                const auto mode = id(spa_mode_state).state;
+                if (mode == "Standard" || mode == "Economy" || mode == "Sleep") {
+                  id(spa_heating_mode).publish_state(mode);
+                }
+
+  - platform: template
+    name: "Spa Filter Cycle"
+    id: spa_filter_cycle
+    icon: "mdi:filter"
+    options:
+      - "F1"
+      - "F2"
+      - "F3"
+      - "F4"
+      - "F5"
+      - "F6"
+      - "F7"
+      - "F8"
+    optimistic: false
+
+    set_action:
+      - if:
+          condition:
+            switch.is_on: spa_filter_cycle_control
+          then:
+            - lambda: |-
+                id(filter_cycle_target) = x;
+                id(spa_filter_cycle).publish_state(x);
+            - script.execute: filter_cycle_worker
+          else:
+            - lambda: |-
+                const auto filter = id(spa_filter_cycle_state).state;
+                if (filter == "F1" || filter == "F2" || filter == "F3" ||
+                    filter == "F4" || filter == "F5" || filter == "F6" ||
+                    filter == "F7" || filter == "F8") {
+                  id(spa_filter_cycle).publish_state(filter);
+                }
+
+switch:
+  - platform: template
+    name: "Spa Heating Mode Control"
+    id: spa_heating_mode_control
+    icon: "mdi:hot-tub"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+    # Mirror the switch into the C++ component. The YAML guards below only cover
+    # the scripts; the 6h set-temp auto-refresh in esp32-spa.h injects its own
+    # Temp+Light combo and can only be reached through this flag. These triggers
+    # also fire on boot when restore_mode restores the saved state.
+    on_turn_on:
+      - lambda: |-
+          id(display_handler).mode_control_enabled = true;
+    on_turn_off:
+      - lambda: |-
+          id(display_handler).mode_control_enabled = false;
+          ESP_LOGI("spa", "Heating mode control disabled - Temp+Light combos suppressed");
+
+  - platform: template
+    name: "Spa Filter Cycle Control"
+    id: spa_filter_cycle_control
+    icon: "mdi:filter"
+    optimistic: true
+    restore_mode: RESTORE_DEFAULT_ON
+
+script:
+  # Read the current heating mode without toggling the physical light.
+  - id: spa_mode_boot_read
+    mode: single
+    then:
+      - repeat:
+          count: 3
+          then:
+            - if:
+                condition:
+                  switch.is_on: spa_heating_mode_control
+                then:
+                  - script.execute: spa_mode_step
+                  - script.wait: spa_mode_step
+
+  # Move the spa towards the latest requested heating mode.
+  - id: spa_mode_worker
+    mode: single
+    then:
+      - repeat:
+          count: 8
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return id(spa_heating_mode_control).state &&
+                           id(spa_mode_state).state != id(spa_mode_target);
+                then:
+                  - script.execute: spa_mode_step
+                  - script.wait: spa_mode_step
+
+      # If the target was not reached after all retries,
+      # restore the dropdown to the actual spa state.
+      - if:
+          condition:
+            lambda: |-
+              return id(spa_mode_state).state != id(spa_mode_target);
+          then:
+            - lambda: |-
+                const auto mode = id(spa_mode_state).state;
+                if (mode == "Standard" ||
+                    mode == "Economy" ||
+                    mode == "Sleep") {
+                  id(spa_heating_mode).publish_state(mode);
+                  id(spa_mode_target) = mode;
+                }
+
+  # One physical Warm + Light mode-change sequence.
+  - id: spa_mode_step
+    mode: single
+    then:
+      - if:
+          condition:
+            switch.is_on: spa_heating_mode_control
+          then:
+            - output.turn_on: spa_warm_out
+            - delay: 100ms
+            - output.turn_off: spa_warm_out
+            - delay: 500ms
+            - output.turn_on: spa_lights_out
+            - delay: 100ms
+            - output.turn_off: spa_lights_out
+            - delay: 1000ms
+
+  # Read the current filter cycle without changing it.
+  - id: filter_cycle_read
+    mode: single
+    then:
+      - if:
+          condition:
+            switch.is_on: spa_filter_cycle_control
+          then:
+            # COOL
+            - output.turn_on: spa_cool_out
+            - delay: 100ms
+            - output.turn_off: spa_cool_out
+            - delay: 500ms
+            - if:
+                condition:
+                  switch.is_on: spa_filter_cycle_control
+                then:
+                  # JETS: enter filter-cycle menu.
+                  - output.turn_on: spa_pumps_out
+                  - delay: 100ms
+                  - output.turn_off: spa_pumps_out
+                  - delay: 1500ms
+
+                  # JETS: leave filter-cycle menu without changing the value.
+                  - output.turn_on: spa_pumps_out
+                  - delay: 100ms
+                  - output.turn_off: spa_pumps_out
+                  - delay: 500ms
+
+  # Enter the filter menu, move to the requested F1-F8 setting,
+  # then leave the menu with JETS.
+  - id: filter_cycle_worker
+    mode: single
+    then:
+      - if:
+          condition:
+            switch.is_on: spa_filter_cycle_control
+          then:
+            # COOL
+            - output.turn_on: spa_cool_out
+            - delay: 100ms
+            - output.turn_off: spa_cool_out
+            - delay: 500ms
+            - if:
+                condition:
+                  switch.is_on: spa_filter_cycle_control
+                then:
+                  # JETS: enter filter-cycle menu.
+                  - output.turn_on: spa_pumps_out
+                  - delay: 100ms
+                  - output.turn_off: spa_pumps_out
+                  - delay: 1500ms
+
+                  # Step through F1-F8 until the requested value is displayed.
+                  - repeat:
+                      count: 8
+                      then:
+                        - if:
+                            condition:
+                              lambda: |-
+                                return id(spa_filter_cycle_control).state &&
+                                       id(spa_filter_cycle_state).state != id(filter_cycle_target);
+                            then:
+                              - script.execute: filter_cycle_step
+                              - script.wait: filter_cycle_step
+
+                  # Always leave the menu, even if control was disabled mid-operation.
+                  - output.turn_on: spa_pumps_out
+                  - delay: 100ms
+                  - output.turn_off: spa_pumps_out
+                  - delay: 500ms
+
+      # If the requested value was not reached, restore the selector
+      # to the value actually observed on the spa display.
+      - if:
+          condition:
+            lambda: |-
+              return id(spa_filter_cycle_state).state != id(filter_cycle_target);
+          then:
+            - lambda: |-
+                const auto filter = id(spa_filter_cycle_state).state;
+                if (filter == "F1" || filter == "F2" ||
+                    filter == "F3" || filter == "F4" ||
+                    filter == "F5" || filter == "F6" ||
+                    filter == "F7" || filter == "F8") {
+                  id(spa_filter_cycle).publish_state(filter);
+                  id(filter_cycle_target) = filter;
+                }
+
+  # One physical WARM press while inside the filter-cycle menu.
+  - id: filter_cycle_step
+    mode: single
+    then:
+      - output.turn_on: spa_warm_out
+      - delay: 100ms
+      - output.turn_off: spa_warm_out
+      - delay: 750ms
+
+  - id: set_spa_target_temp
+    mode: restart
+    parameters:
+      target_temp: float
+    then:
+      - repeat:
+          count: 30
+          then:
+            - if:
+                condition:
+                  lambda: |-
+                    return abs(id(spa_set_temp).state - target_temp) > 0.5f;
+                then:
+                  - if:
+                      condition:
+                        lambda: |-
+                          return id(spa_set_temp).state < target_temp;
+                      then:
+                        - button.press: btn_warm
+                      else:
+                        - button.press: btn_cool
+                  - delay: 800ms
+
+# ===== BUTTONS (GPIO outputs) =====
+output:
+  - platform: gpio
+    id: spa_warm_out
+    pin: 25
+    inverted: false
+  - platform: gpio
+    id: spa_cool_out
+    pin: 26
+    inverted: false
+  - platform: gpio
+    id: spa_lights_out
+    pin: 27
+    inverted: false
+  - platform: gpio
+    id: spa_pumps_out
+    pin: 32
+    inverted: false
+
+button:
+  - platform: template
+    id: btn_warm
+    name: "Spa Warm"
+    icon: "mdi:thermometer-plus"
+    on_press:
+      - logger.log: "Button pressed: WARM"
+      - output.turn_on: spa_warm_out
+      - delay: 100ms
+      - output.turn_off: spa_warm_out
+
+  - platform: template
+    id: btn_cool
+    name: "Spa Cool"
+    icon: "mdi:thermometer-minus"
+    on_press:
+      - logger.log: "Button pressed: COOL"
+      - output.turn_on: spa_cool_out
+      - delay: 100ms
+      - output.turn_off: spa_cool_out
+
+  - platform: template
+    name: "Spa Lights"
+    icon: "mdi:lightbulb"
+    on_press:
+      - logger.log: "Button pressed: LIGHTS"
+      - output.turn_on: spa_lights_out
+      - delay: 100ms
+      - output.turn_off: spa_lights_out
+
+  - platform: template
+    name: "Spa Pumps"
+    icon: "mdi:pump"
+    on_press:
+      - logger.log: "Button pressed: PUMPS"
+      - output.turn_on: spa_pumps_out
+      - delay: 100ms
+      - output.turn_off: spa_pumps_out
+
+  - platform: template
+    name: "Set Spa High"
+    icon: "mdi:thermometer-high"
+    on_press:
+      - script.execute:
+          id: set_spa_target_temp
+          target_temp: !lambda |-
+            const float target = id(spa_high_target_temp).state;
+            return id(display_is_fahrenheit) ? (target - 32.0f) * 5.0f / 9.0f : target;
+
+  - platform: template
+    name: "Set Spa Low"
+    icon: "mdi:thermometer-low"
+    on_press:
+      - script.execute:
+          id: set_spa_target_temp
+          target_temp: !lambda |-
+            const float target = id(spa_low_target_temp).state;
+            return id(display_is_fahrenheit) ? (target - 32.0f) * 5.0f / 9.0f : target;
+

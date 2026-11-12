@@ -13,7 +13,17 @@ This project adds an Wifi module to a Balboa Hot Tub. This project has been test
 
 ## Purchase Option
 
- I have modules available for purchase. If interested, please email Hayley at storm.automations@gmail.com 
+I have modules available for purchase. If interested, please email Hayley at storm.automations@gmail.com. Don't have Home Assistant yet? See the cloud setup option below.
+
+---
+
+## No Home Assistant Yet? (Cloud Setup)
+
+If you don't already run Home Assistant, you can run it on an Oracle Cloud Always Free VM and connect this module over MQTT (TLS) — no router port forwarding required. The module's fallback hotspot serves a setup page where you choose between local Home Assistant (native API) and a cloud one (MQTT), so one firmware supports both.
+
+The local settings page is at `http://esp32-spa.local/` (username `spa`, password `balboawifi`). This shared, fixed password is not strong access control, and HTTP does not encrypt the password or settings. Only use it on a trusted home network and never expose it to the internet. See the cloud guide for MQTT troubleshooting.
+
+See the step-by-step guide: [docs/cloud-setup.md](docs/cloud-setup.md). The cloud deployment bundle lives in [cloud/](cloud/).
 
 ---
 
@@ -238,5 +248,3 @@ Logic analyzer screenshot:
 - GL2000 Series: https://github.com/netmindz/balboa_GL_ML_spa_control
 - BP Series: https://github.com/ccutrer/balboa_worldwide_app
 - GS523SZ: https://github.com/Shuraxxx/-Balboa-GS523SZ-with-panel-VL801D-DeluxeSerie--MQTT
-
-

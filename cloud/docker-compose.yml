@@ -1,0 +1,64 @@
+# Cloud Home Assistant stack for the Balboa spa module.
+#
+# Services:
+#   homeassistant  - Home Assistant Core (internal only, reached via Caddy)
+#   mosquitto      - MQTT broker; TLS on 8883 for the spa module (public),
+#                    plaintext 1883 on the internal docker network for HA
+#   caddy          - HTTPS reverse proxy for the Home Assistant web UI
+#   acme           - acme.sh daemon; issues/renews the Let's Encrypt
+#                    certificate via DuckDNS DNS-01 and reloads the others
+#
+# The setup.sh script generates .env, Caddyfile, mosquitto/passwords and the
+# initial certificate before `docker compose up -d` is run.
+
+services:
+  homeassistant:
+    image: ghcr.io/home-assistant/home-assistant:stable
+    container_name: homeassistant
+    restart: unless-stopped
+    volumes:
+      - ./homeassistant:/config
+    # No published ports: reachable only through Caddy.
+    depends_on:
+      - mosquitto
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - "8883:8883"   # public TLS listener for the spa module
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwords:/mosquitto/config/passwords
+      - ./mosquitto/data:/mosquitto/data
+      - ./certs:/mosquitto/certs:ro
+
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"     # redirects to HTTPS
+      - "443:443"   # Home Assistant web UI
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./certs:/certs:ro
+      - caddy_data:/data
+    depends_on:
+      - homeassistant
+
+  acme:
+    image: neilpang/acme.sh:latest
+    container_name: acme
+    restart: unless-stopped
+    environment:
+      - DuckDNS_Token=${DUCKDNS_TOKEN}   # needed for DNS-01 renewals
+    volumes:
+      - ./acme:/acme.sh
+      - ./certs:/certs
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: daemon
+
+volumes:
+  caddy_data:
